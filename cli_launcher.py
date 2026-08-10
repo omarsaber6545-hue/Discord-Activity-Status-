@@ -4,6 +4,24 @@ import json
 import time
 import argparse
 import logging
+
+# Ensure UTF-8 encoding for console output and handle pythonw devnull streams
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, "w", encoding="utf-8")
+else:
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, "w", encoding="utf-8")
+else:
+    try:
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 from rpc_manager import DiscordRPCManager
 
 CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
@@ -28,7 +46,7 @@ def main():
     args = parser.parse_args()
 
     config = load_config()
-    client_id = args.client_id or config.get("client_id", "123456789012345678")
+    client_id = args.client_id or config.get("client_id", "1529031652255203438")
 
     presence_data = config.get("current_presence", {})
 
