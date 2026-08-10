@@ -1,0 +1,868 @@
+import os
+import sys
+import json
+import time
+import webbrowser
+import subprocess
+import threading
+import tkinter as tk
+from typing import Dict, Any
+
+import customtkinter as ctk
+from PIL import Image, ImageTk, ImageDraw
+
+from rpc_manager import DiscordRPCManager
+
+# Appearance settings
+ctk.set_appearance_mode("Dark")
+ctk.set_default_color_theme("blue")
+
+CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+
+
+def setup_entry_context_menu(entry_widget):
+    """
+    Attaches right-click context menu (Paste, Copy, Cut, Select All)
+    and handles Ctrl+V, Ctrl+C, Ctrl+X, Ctrl+A across English & Arabic keyboard layouts.
+    """
+    target = getattr(entry_widget, "_entry", entry_widget)
+
+    menu = tk.Menu(
+        target,
+        tearoff=0,
+        bg="#2b2d31",
+        fg="#ffffff",
+        activebackground="#5865f2",
+        activeforeground="#ffffff",
+        relief="flat",
+        bd=1
+    )
+
+    def _do_paste(event=None):
+        try:
+            clipboard_text = target.clipboard_get()
+            if clipboard_text:
+                try:
+                    target.delete("sel.first", "sel.last")
+                except tk.TclError:
+                    pass
+                target.insert(target.index(tk.INSERT), clipboard_text)
+                target.event_generate("<<Modified>>")
+        except Exception:
+            pass
+        return "break"
+
+    def _do_copy(event=None):
+        try:
+            try:
+                selected = target.selection_get()
+            except tk.TclError:
+                selected = ""
+            if selected:
+                target.clipboard_clear()
+                target.clipboard_append(selected)
+        except Exception:
+            pass
+        return "break"
+
+    def _do_cut(event=None):
+        try:
+            try:
+                selected = target.selection_get()
+            except tk.TclError:
+                selected = ""
+            if selected:
+                target.clipboard_clear()
+                target.clipboard_append(selected)
+                target.delete("sel.first", "sel.last")
+                target.event_generate("<<Modified>>")
+        except Exception:
+            pass
+        return "break"
+
+    def _do_select_all(event=None):
+        target.select_range(0, tk.END)
+        target.icursor(tk.END)
+        return "break"
+
+    menu.add_command(label="📋 Paste / لصق", command=_do_paste)
+    menu.add_command(label="📄 Copy / نسخ", command=_do_copy)
+    menu.add_command(label="✂️ Cut / قص", command=_do_cut)
+    menu.add_separator()
+    menu.add_command(label="🔍 Select All / تحديد الكل", command=_do_select_all)
+
+    def _popup_menu(event):
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
+
+    # Bind right-click on both Tkinter inner entry and CTkEntry frame
+    target.bind("<Button-3>", _popup_menu)
+    if hasattr(entry_widget, "bind"):
+        entry_widget.bind("<Button-3>", _popup_menu)
+
+    def _on_key_press(event):
+        # event.state & 4 checks if Control key is held down
+        if event.state & 4:
+            if event.keycode == 86 or event.keysym.lower() in ("v", "r"):
+                return _do_paste(event)
+            elif event.keycode == 67:
+                return _do_copy(event)
+            elif event.keycode == 88:
+                return _do_cut(event)
+            elif event.keycode == 65:
+                return _do_select_all(event)
+
+    # Keyboard shortcut bindings
+    for bind_target in [target, entry_widget]:
+        if hasattr(bind_target, "bind"):
+            bind_target.bind("<Control-v>", _do_paste)
+            bind_target.bind("<Control-V>", _do_paste)
+            bind_target.bind("<Control-c>", _do_copy)
+            bind_target.bind("<Control-C>", _do_copy)
+            bind_target.bind("<Control-x>", _do_cut)
+            bind_target.bind("<Control-X>", _do_cut)
+            bind_target.bind("<Control-a>", _do_select_all)
+            bind_target.bind("<Control-A>", _do_select_all)
+            bind_target.bind("<Key>", _on_key_press)
+
+
+class DiscordPreviewCard(ctk.CTkFrame):
+    """Component that renders a real-time visual mock of the Discord Activity Card."""
+
+    def __init__(self, master, **kwargs):
+        super().__init__(master, fg_color="#1e1f22", corner_radius=12, **kwargs)
+
+        # Title / Activity Status Header
+        self.header_label = ctk.CTkLabel(
+            self,
+            text="LIVE DISCORD CARD PREVIEW",
+            font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
+            text_color="#949ba4"
+        )
+        self.header_label.pack(anchor="w", padx=16, pady=(14, 6))
+
+        # Main Discord Profile Activity Box
+        self.card_bg = ctk.CTkFrame(self, fg_color="#2b2d31", corner_radius=10)
+        self.card_bg.pack(fill="both", expand=True, padx=14, pady=(0, 14))
+
+        # Activity Title Header ("PLAYING A GAME")
+        self.activity_type = ctk.CTkLabel(
+            self.card_bg,
+            text="PLAYING A GAME",
+            font=ctk.CTkFont(family="Segoe UI", size=10, weight="bold"),
+            text_color="#b5bac1"
+        )
+        self.activity_type.pack(anchor="w", padx=14, pady=(12, 8))
+
+        # Horizontal layout for Icons & Info
+        self.body_frame = ctk.CTkFrame(self.card_bg, fg_color="transparent")
+        self.body_frame.pack(fill="x", padx=14, pady=0)
+
+        # Image Container Frame
+        self.image_container = ctk.CTkFrame(self.body_frame, fg_color="transparent", width=80, height=80)
+        self.image_container.pack(side="left", anchor="n", padx=(0, 12))
+
+        # Large Image Label
+        self.large_img_label = ctk.CTkLabel(
+            self.image_container,
+            text="",
+            width=70,
+            height=70,
+            fg_color="#111214",
+            corner_radius=8
+        )
+        self.large_img_label.place(x=0, y=0)
+
+        # Small Image Label
+        self.small_img_label = ctk.CTkLabel(
+            self.image_container,
+            text="",
+            width=26,
+            height=26,
+            fg_color="#5865f2",
+            corner_radius=13
+        )
+        self.small_img_label.place(x=48, y=48)
+
+        # Text Details Container
+        self.text_frame = ctk.CTkFrame(self.body_frame, fg_color="transparent")
+        self.text_frame.pack(side="left", fill="both", expand=True)
+
+        # App / Game Title ("omar dev")
+        self.game_title = ctk.CTkLabel(
+            self.text_frame,
+            text="omar dev",
+            font=ctk.CTkFont(family="Segoe UI", size=14, weight="bold"),
+            text_color="#f2f3f5",
+            anchor="w"
+        )
+        self.game_title.pack(fill="x", pady=(0, 2))
+
+        # Details Line
+        self.details_label = ctk.CTkLabel(
+            self.text_frame,
+            text="Writing code in VS Code",
+            font=ctk.CTkFont(family="Segoe UI", size=12),
+            text_color="#dbdee1",
+            anchor="w"
+        )
+        self.details_label.pack(fill="x", pady=0)
+
+        # State Line
+        self.state_label = ctk.CTkLabel(
+            self.text_frame,
+            text="Developing awesome apps 🚀",
+            font=ctk.CTkFont(family="Segoe UI", size=12),
+            text_color="#dbdee1",
+            anchor="w"
+        )
+        self.state_label.pack(fill="x", pady=0)
+
+        # Timer Line
+        self.timer_label = ctk.CTkLabel(
+            self.text_frame,
+            text="00:00:00 elapsed",
+            font=ctk.CTkFont(family="Segoe UI", size=11),
+            text_color="#949ba4",
+            anchor="w"
+        )
+        self.timer_label.pack(fill="x", pady=(2, 0))
+
+        # Buttons Frame inside Card
+        self.buttons_frame = ctk.CTkFrame(self.card_bg, fg_color="transparent")
+        self.buttons_frame.pack(fill="x", padx=14, pady=(12, 14))
+
+        self.btn1_preview = ctk.CTkButton(
+            self.buttons_frame,
+            text="GitHub Profile",
+            fg_color="#4e5058",
+            hover_color="#6d6f78",
+            text_color="#ffffff",
+            height=32,
+            corner_radius=4,
+            font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
+            command=lambda: self._open_url(self.btn1_url)
+        )
+        self.btn1_url = ""
+
+        self.btn2_preview = ctk.CTkButton(
+            self.buttons_frame,
+            text="Omar Dev Site",
+            fg_color="#4e5058",
+            hover_color="#6d6f78",
+            text_color="#ffffff",
+            height=32,
+            corner_radius=4,
+            font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
+            command=lambda: self._open_url(self.btn2_url)
+        )
+        self.btn2_url = ""
+
+        # Default Placeholder Icons
+        self.default_large_icon = self._create_placeholder_image(70, 70, "#5865f2", "🎮")
+        self.default_small_icon = self._create_placeholder_image(26, 26, "#23a55a", "✨")
+
+        self.large_img_label.configure(image=self.default_large_icon)
+        self.small_img_label.configure(image=self.default_small_icon)
+
+    def _create_placeholder_image(self, width: int, height: int, bg_color: str, symbol: str):
+        """Draws a round-rect placeholder icon with a symbol."""
+        img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        draw.rounded_rectangle([0, 0, width, height], radius=10, fill=bg_color)
+        return ctk.CTkImage(light_image=img, dark_image=img, size=(width, height))
+
+    def _open_url(self, url: str):
+        if url and url.startswith(("http://", "https://")):
+            webbrowser.open(url)
+
+    def update_card(
+        self,
+        app_name: str,
+        details: str,
+        state: str,
+        large_image: str,
+        large_text: str,
+        small_image: str,
+        small_text: str,
+        show_timer: bool,
+        elapsed_str: str,
+        btn1_label: str,
+        btn1_url: str,
+        btn2_label: str,
+        btn2_url: str
+    ):
+        self.game_title.configure(text=app_name if app_name else "omar dev")
+
+        # Hide empty details/state
+        if details.strip():
+            self.details_label.configure(text=details.strip())
+            self.details_label.pack(fill="x", pady=0)
+        else:
+            self.details_label.pack_forget()
+
+        if state.strip():
+            self.state_label.configure(text=state.strip())
+            self.state_label.pack(fill="x", pady=0)
+        else:
+            self.state_label.pack_forget()
+
+        if show_timer:
+            self.timer_label.configure(text=f"{elapsed_str} elapsed")
+            self.timer_label.pack(fill="x", pady=(2, 0))
+        else:
+            self.timer_label.pack_forget()
+
+        # Update small image visibility
+        if small_image.strip():
+            self.small_img_label.place(x=48, y=48)
+        else:
+            self.small_img_label.place_forget()
+
+        # Update preview buttons
+        self.btn1_url = btn1_url.strip()
+        self.btn2_url = btn2_url.strip()
+
+        has_b1 = bool(btn1_label.strip() and btn1_url.strip())
+        has_b2 = bool(btn2_label.strip() and btn2_url.strip())
+
+        if has_b1 or has_b2:
+            self.buttons_frame.pack(fill="x", padx=14, pady=(12, 14))
+        else:
+            self.buttons_frame.pack_forget()
+
+        if has_b1:
+            self.btn1_preview.configure(text=btn1_label.strip())
+            self.btn1_preview.pack(fill="x", pady=(0, 6) if has_b2 else 0)
+        else:
+            self.btn1_preview.pack_forget()
+
+        if has_b2:
+            self.btn2_preview.configure(text=btn2_label.strip())
+            self.btn2_preview.pack(fill="x", pady=0)
+        else:
+            self.btn2_preview.pack_forget()
+
+
+class OmarDevApp(ctk.CTk):
+
+    def __init__(self):
+        super().__init__()
+
+        self.title("🎮 omar dev - Discord Rich Presence & Games Selector")
+        self.geometry("1080x740")
+        self.minsize(980, 660)
+
+        # Discord RPC instance
+        self.rpc_manager = DiscordRPCManager()
+        self.start_timestamp = time.time()
+
+        # Load Configuration
+        self.config = self.load_config()
+
+        # Observable Variables
+        curr_presence = self.config.get("current_presence", {})
+        self.var_client_id = ctk.StringVar(value=self.config.get("client_id", "1529031652255203438"))
+        self.var_game_name = ctk.StringVar(value=curr_presence.get("game_name", "omar dev"))
+        self.var_details = ctk.StringVar(value=curr_presence.get("details", "Writing code in VS Code"))
+        self.var_state = ctk.StringVar(value=curr_presence.get("state", "Developing awesome apps 🚀"))
+        self.var_large_img = ctk.StringVar(value=curr_presence.get("large_image", "logo"))
+        self.var_large_txt = ctk.StringVar(value=curr_presence.get("large_text", "Omar Dev - Coding"))
+        self.var_small_img = ctk.StringVar(value=curr_presence.get("small_image", "logo"))
+        self.var_small_txt = ctk.StringVar(value=curr_presence.get("small_text", "Coding is life"))
+        self.var_show_timer = ctk.BooleanVar(value=curr_presence.get("show_timer", True))
+
+        self.var_btn1_lbl = ctk.StringVar(value=curr_presence.get("button1_label", "GitHub Profile"))
+        self.var_btn1_url = ctk.StringVar(value=curr_presence.get("button1_url", "https://github.com"))
+        self.var_btn2_lbl = ctk.StringVar(value=curr_presence.get("button2_label", "Omar Dev Site"))
+        self.var_btn2_url = ctk.StringVar(value=curr_presence.get("button2_url", "https://omar-dev.com"))
+
+        # Setup GUI Grid Layout
+        self.grid_columnconfigure(0, weight=3)  # Left controls
+        self.grid_columnconfigure(1, weight=2)  # Right preview
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=0)  # Status bar
+
+        self._build_left_panel()
+        self._build_right_panel()
+        self._build_status_bar()
+
+        # Attach real-time binding listeners
+        for var in [
+            self.var_client_id, self.var_game_name, self.var_details, self.var_state,
+            self.var_large_img, self.var_large_txt, self.var_small_img,
+            self.var_small_txt, self.var_btn1_lbl, self.var_btn1_url,
+            self.var_btn2_lbl, self.var_btn2_url
+        ]:
+            var.trace_add("write", lambda *args: self.update_live_preview())
+
+        self.var_show_timer.trace_add("write", lambda *args: self.update_live_preview())
+
+        # Start live timer update loop
+        self.update_timer_loop()
+        self.update_live_preview()
+
+    def load_config(self) -> dict:
+        if os.path.exists(CONFIG_PATH):
+            try:
+                with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception as e:
+                print(f"Error loading config: {e}")
+        return {}
+
+    def save_config(self):
+        self.config["client_id"] = self.var_client_id.get().strip()
+        self.config["game_name"] = self.var_game_name.get().strip()
+        self.config["current_presence"] = {
+            "game_name": self.var_game_name.get().strip(),
+            "details": self.var_details.get().strip(),
+            "state": self.var_state.get().strip(),
+            "large_image": self.var_large_img.get().strip(),
+            "large_text": self.var_large_txt.get().strip(),
+            "small_image": self.var_small_img.get().strip(),
+            "small_text": self.var_small_txt.get().strip(),
+            "show_timer": self.var_show_timer.get(),
+            "button1_label": self.var_btn1_lbl.get().strip(),
+            "button1_url": self.var_btn1_url.get().strip(),
+            "button2_label": self.var_btn2_lbl.get().strip(),
+            "button2_url": self.var_btn2_url.get().strip()
+        }
+
+        try:
+            with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+                json.dump(self.config, f, indent=2, ensure_ascii=False)
+            self.set_status("💾 Settings saved to config.json!", color="#23a55a")
+        except Exception as e:
+            self.set_status(f"❌ Error saving settings: {e}", color="#ed4245")
+
+    def _build_left_panel(self):
+        left_container = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        left_container.grid(row=0, column=0, sticky="nsew", padx=(16, 8), pady=16)
+
+        # Header Title
+        title_frame = ctk.CTkFrame(left_container, fg_color="transparent")
+        title_frame.pack(fill="x", pady=(0, 14))
+
+        main_header = ctk.CTkLabel(
+            title_frame,
+            text="🎮 omar dev - Rich Presence",
+            font=ctk.CTkFont(family="Segoe UI", size=22, weight="bold"),
+            text_color="#5865f2"
+        )
+        main_header.pack(anchor="w")
+
+        sub_header = ctk.CTkLabel(
+            title_frame,
+            text="اختر لعبتك المفضلة أو خصص حالتك الرسمية على ديسكورد بنقرة واحدة!",
+            font=ctk.CTkFont(family="Segoe UI", size=12),
+            text_color="#b5bac1"
+        )
+        sub_header.pack(anchor="w")
+
+        # Game & Preset Selector Dropdown
+        preset_frame = ctk.CTkFrame(left_container, fg_color="#2b2d31", corner_radius=10)
+        preset_frame.pack(fill="x", pady=(0, 14), padx=2)
+
+        preset_lbl = ctk.CTkLabel(
+            preset_frame,
+            text="🎮 اختر اللعبة أو الوضع المسبق (Games Library Selector):",
+            font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold")
+        )
+        preset_lbl.pack(anchor="w", padx=12, pady=(10, 4))
+
+        preset_names = list(self.config.get("presets", {}).keys())
+        if not preset_names:
+            preset_names = [
+                "💻 VS Code / Coding", "🎯 Valorant", "⛏️ Minecraft",
+                "🏎️ Grand Theft Auto V", "🔫 Counter-Strike 2",
+                "⚔️ League of Legends", "🧱 Roblox", "☕ AFK / Break"
+            ]
+
+        self.game_dropdown = ctk.CTkOptionMenu(
+            preset_frame,
+            values=preset_names,
+            fg_color="#5865f2",
+            button_color="#4752c4",
+            button_hover_color="#3c45a5",
+            font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"),
+            dropdown_font=ctk.CTkFont(family="Segoe UI", size=12),
+            command=self.apply_preset
+        )
+        self.game_dropdown.pack(fill="x", padx=12, pady=(0, 12))
+
+        # Section 1: Client ID & Game Name
+        sec1 = self._create_card_section(left_container, "🆔 Discord Application Setup & Game Title")
+
+        lbl_gname = ctk.CTkLabel(sec1, text="اسم اللعبة المعروضة (Game Title):", font=ctk.CTkFont(size=12, weight="bold"))
+        lbl_gname.pack(anchor="w", padx=12, pady=(8, 2))
+        entry_gname = ctk.CTkEntry(sec1, textvariable=self.var_game_name, placeholder_text="e.g. Valorant, Minecraft, omar dev")
+        entry_gname.pack(fill="x", padx=12, pady=(0, 8))
+        setup_entry_context_menu(entry_gname)
+
+        lbl_cid = ctk.CTkLabel(sec1, text="Application Client ID:", font=ctk.CTkFont(size=12, weight="bold"))
+        lbl_cid.pack(anchor="w", padx=12, pady=(0, 2))
+
+        cid_frame = ctk.CTkFrame(sec1, fg_color="transparent")
+        cid_frame.pack(fill="x", padx=12, pady=(0, 10))
+
+        entry_cid = ctk.CTkEntry(cid_frame, textvariable=self.var_client_id, placeholder_text="e.g. 1529031652255203438")
+        entry_cid.pack(side="left", fill="x", expand=True, padx=(0, 8))
+        setup_entry_context_menu(entry_cid)
+
+        btn_dev_portal = ctk.CTkButton(
+            cid_frame,
+            text="🌐 Developer Portal",
+            width=130,
+            fg_color="#35363c",
+            hover_color="#4e5058",
+            command=lambda: webbrowser.open("https://discord.com/developers/applications")
+        )
+        btn_dev_portal.pack(side="right")
+
+        # Section 2: Details & State
+        sec2 = self._create_card_section(left_container, "📝 Activity Text Details")
+
+        lbl_det = ctk.CTkLabel(sec2, text="Details (تفاصيل السطر الأول):", font=ctk.CTkFont(size=12, weight="bold"))
+        lbl_det.pack(anchor="w", padx=12, pady=(8, 2))
+        entry_det = ctk.CTkEntry(sec2, textvariable=self.var_details, placeholder_text="Writing code in VS Code")
+        entry_det.pack(fill="x", padx=12, pady=(0, 8))
+        setup_entry_context_menu(entry_det)
+
+        lbl_st = ctk.CTkLabel(sec2, text="State (حالة السطر الثاني):", font=ctk.CTkFont(size=12, weight="bold"))
+        lbl_st.pack(anchor="w", padx=12, pady=(0, 2))
+        entry_st = ctk.CTkEntry(sec2, textvariable=self.var_state, placeholder_text="Developing awesome apps 🚀")
+        entry_st.pack(fill="x", padx=12, pady=(0, 10))
+        setup_entry_context_menu(entry_st)
+
+        # Section 3: Art Assets / Images
+        sec3 = self._create_card_section(left_container, "🖼️ Rich Presence Image Keys")
+
+        row_img = ctk.CTkFrame(sec3, fg_color="transparent")
+        row_img.pack(fill="x", padx=12, pady=(8, 10))
+
+        # Large Image Box
+        l_box = ctk.CTkFrame(row_img, fg_color="transparent")
+        l_box.pack(side="left", fill="x", expand=True, padx=(0, 6))
+
+        ctk.CTkLabel(l_box, text="Large Image Key:", font=ctk.CTkFont(size=11, weight="bold")).pack(anchor="w")
+        e_l_img = ctk.CTkEntry(l_box, textvariable=self.var_large_img, placeholder_text="coding_icon")
+        e_l_img.pack(fill="x", pady=(2, 4))
+        setup_entry_context_menu(e_l_img)
+
+        ctk.CTkLabel(l_box, text="Large Image Text (Tooltip):", font=ctk.CTkFont(size=10)).pack(anchor="w")
+        e_l_txt = ctk.CTkEntry(l_box, textvariable=self.var_large_txt, placeholder_text="Hover text")
+        e_l_txt.pack(fill="x", pady=(2, 0))
+        setup_entry_context_menu(e_l_txt)
+
+        # Small Image Box
+        s_box = ctk.CTkFrame(row_img, fg_color="transparent")
+        s_box.pack(side="right", fill="x", expand=True, padx=(6, 0))
+
+        ctk.CTkLabel(s_box, text="Small Image Key:", font=ctk.CTkFont(size=11, weight="bold")).pack(anchor="w")
+        e_s_img = ctk.CTkEntry(s_box, textvariable=self.var_small_img, placeholder_text="python_logo")
+        e_s_img.pack(fill="x", pady=(2, 4))
+        setup_entry_context_menu(e_s_img)
+
+        ctk.CTkLabel(s_box, text="Small Image Text (Tooltip):", font=ctk.CTkFont(size=10)).pack(anchor="w")
+        e_s_txt = ctk.CTkEntry(s_box, textvariable=self.var_small_txt, placeholder_text="Hover text")
+        e_s_txt.pack(fill="x", pady=(2, 0))
+        setup_entry_context_menu(e_s_txt)
+
+        # Section 4: Timer & Interactive Buttons
+        sec4 = self._create_card_section(left_container, "🔗 Interactive Buttons & Elapsed Timer")
+
+        switch_timer = ctk.CTkSwitch(
+            sec4,
+            text="إظهار عدّاد الوقت (Show Elapsed Timer)",
+            variable=self.var_show_timer,
+            progress_color="#23a55a",
+            font=ctk.CTkFont(size=12, weight="bold")
+        )
+        switch_timer.pack(anchor="w", padx=12, pady=(10, 10))
+
+        # Button 1 setup
+        b1_frame = ctk.CTkFrame(sec4, fg_color="transparent")
+        b1_frame.pack(fill="x", padx=12, pady=(0, 6))
+
+        ctk.CTkLabel(b1_frame, text="Button 1 Label:", font=ctk.CTkFont(size=11)).pack(side="left", padx=(0, 4))
+        e_b1_lbl = ctk.CTkEntry(b1_frame, textvariable=self.var_btn1_lbl, width=130, placeholder_text="GitHub")
+        e_b1_lbl.pack(side="left", padx=(0, 8))
+        setup_entry_context_menu(e_b1_lbl)
+
+        ctk.CTkLabel(b1_frame, text="URL:", font=ctk.CTkFont(size=11)).pack(side="left", padx=(0, 4))
+        e_b1_url = ctk.CTkEntry(b1_frame, textvariable=self.var_btn1_url, placeholder_text="https://...")
+        e_b1_url.pack(side="left", fill="x", expand=True)
+        setup_entry_context_menu(e_b1_url)
+
+        # Button 2 setup
+        b2_frame = ctk.CTkFrame(sec4, fg_color="transparent")
+        b2_frame.pack(fill="x", padx=12, pady=(0, 12))
+
+        ctk.CTkLabel(b2_frame, text="Button 2 Label:", font=ctk.CTkFont(size=11)).pack(side="left", padx=(0, 4))
+        e_b2_lbl = ctk.CTkEntry(b2_frame, textvariable=self.var_btn2_lbl, width=130, placeholder_text="Omar Dev Site")
+        e_b2_lbl.pack(side="left", padx=(0, 8))
+        setup_entry_context_menu(e_b2_lbl)
+
+        ctk.CTkLabel(b2_frame, text="URL:", font=ctk.CTkFont(size=11)).pack(side="left", padx=(0, 4))
+        e_b2_url = ctk.CTkEntry(b2_frame, textvariable=self.var_btn2_url, placeholder_text="https://...")
+        e_b2_url.pack(side="left", fill="x", expand=True)
+        setup_entry_context_menu(e_b2_url)
+
+        # Action Buttons Grid
+        action_frame = ctk.CTkFrame(left_container, fg_color="transparent")
+        action_frame.pack(fill="x", pady=(4, 10))
+
+        self.btn_start = ctk.CTkButton(
+            action_frame,
+            text="🚀 Start Rich Presence",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            fg_color="#23a55a",
+            hover_color="#1a7f45",
+            height=40,
+            command=self.start_presence
+        )
+        self.btn_start.pack(side="left", expand=True, fill="x", padx=(0, 4))
+
+        self.btn_update = ctk.CTkButton(
+            action_frame,
+            text="🔄 Update",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            fg_color="#5865f2",
+            hover_color="#4752c4",
+            height=40,
+            command=self.update_presence_now
+        )
+        self.btn_update.pack(side="left", expand=True, fill="x", padx=4)
+
+        self.btn_stop = ctk.CTkButton(
+            action_frame,
+            text="🛑 Stop",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            fg_color="#ed4245",
+            hover_color="#c03537",
+            height=40,
+            command=self.stop_presence
+        )
+        self.btn_stop.pack(side="left", expand=True, fill="x", padx=(4, 0))
+
+        # Bottom secondary actions (Save & Background mode)
+        sec_actions = ctk.CTkFrame(left_container, fg_color="transparent")
+        sec_actions.pack(fill="x", pady=(0, 10))
+
+        btn_save = ctk.CTkButton(
+            sec_actions,
+            text="💾 Save Config",
+            fg_color="#35363c",
+            hover_color="#4e5058",
+            height=34,
+            command=self.save_config
+        )
+        btn_save.pack(side="left", expand=True, fill="x", padx=(0, 4))
+
+        btn_bg = ctk.CTkButton(
+            sec_actions,
+            text="🌙 Run in Background Mode",
+            fg_color="#35363c",
+            hover_color="#4e5058",
+            height=34,
+            command=self.run_background_mode
+        )
+        btn_bg.pack(side="right", expand=True, fill="x", padx=(4, 0))
+
+    def _create_card_section(self, parent, title: str) -> ctk.CTkFrame:
+        card = ctk.CTkFrame(parent, fg_color="#2b2d31", corner_radius=10)
+        card.pack(fill="x", pady=(0, 14), padx=2)
+
+        lbl = ctk.CTkLabel(
+            card,
+            text=title,
+            font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"),
+            text_color="#f2f3f5"
+        )
+        lbl.pack(anchor="w", padx=12, pady=(10, 4))
+        return card
+
+    def _build_right_panel(self):
+        right_container = ctk.CTkFrame(self, fg_color="transparent")
+        right_container.grid(row=0, column=1, sticky="nsew", padx=(8, 16), pady=16)
+
+        # Discord User Card Mock Outer Frame
+        user_card_frame = ctk.CTkFrame(right_container, fg_color="#18191c", corner_radius=14)
+        user_card_frame.pack(fill="both", expand=True)
+
+        # Banner Graphic Header
+        banner = ctk.CTkFrame(user_card_frame, fg_color="#5865f2", height=90, corner_radius=0)
+        banner.pack(fill="x", side="top")
+
+        # Avatar Profile Circle Simulation
+        avatar_frame = ctk.CTkFrame(user_card_frame, fg_color="#2b2d31", width=74, height=74, corner_radius=37)
+        avatar_frame.place(x=20, y=50)
+
+        avatar_inner = ctk.CTkLabel(avatar_frame, text="😎", font=ctk.CTkFont(size=36))
+        avatar_inner.place(relx=0.5, rely=0.5, anchor="center")
+
+        # User identity label
+        user_name = ctk.CTkLabel(
+            user_card_frame,
+            text="omar dev",
+            font=ctk.CTkFont(family="Segoe UI", size=18, weight="bold"),
+            text_color="#ffffff"
+        )
+        user_name.pack(anchor="w", padx=20, pady=(45, 0))
+
+        user_tag = ctk.CTkLabel(
+            user_card_frame,
+            text="omar_dev_official",
+            font=ctk.CTkFont(family="Segoe UI", size=12),
+            text_color="#949ba4"
+        )
+        user_tag.pack(anchor="w", padx=20, pady=(0, 14))
+
+        # Live Card Preview Component
+        self.preview_card = DiscordPreviewCard(user_card_frame)
+        self.preview_card.pack(fill="both", expand=True, padx=16, pady=(0, 16))
+
+    def _build_status_bar(self):
+        self.status_frame = ctk.CTkFrame(self, fg_color="#111214", height=32, corner_radius=0)
+        self.status_frame.grid(row=1, column=0, columnspan=2, sticky="ew")
+
+        self.status_label = ctk.CTkLabel(
+            self.status_frame,
+            text="⚪ Discord RPC Status: Disconnected / Idle",
+            font=ctk.CTkFont(family="Segoe UI", size=11),
+            text_color="#949ba4"
+        )
+        self.status_label.pack(side="left", padx=16, pady=4)
+
+    def set_status(self, text: str, color: str = "#949ba4"):
+        self.status_label.configure(text=text, text_color=color)
+
+    def apply_preset(self, preset_name: str):
+        presets = self.config.get("presets", {})
+        if preset_name in presets:
+            data = presets[preset_name]
+            if "game_name" in data and data["game_name"]:
+                self.var_game_name.set(data["game_name"])
+            if "client_id" in data and data["client_id"]:
+                self.var_client_id.set(data["client_id"])
+            self.var_details.set(data.get("details", ""))
+            self.var_state.set(data.get("state", ""))
+            self.var_large_img.set(data.get("large_image", ""))
+            self.var_large_txt.set(data.get("large_text", ""))
+            self.var_small_img.set(data.get("small_image", ""))
+            self.var_small_txt.set(data.get("small_text", ""))
+            self.var_show_timer.set(data.get("show_timer", True))
+            self.var_btn1_lbl.set(data.get("button1_label", ""))
+            self.var_btn1_url.set(data.get("button1_url", ""))
+            self.var_btn2_lbl.set(data.get("button2_label", ""))
+            self.var_btn2_url.set(data.get("button2_url", ""))
+            self.set_status(f"⚡ Applied game preset: {preset_name}", color="#5865f2")
+
+    def update_live_preview(self):
+        elapsed_sec = int(time.time() - self.start_timestamp)
+        hours, remainder = divmod(elapsed_sec, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        elapsed_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+        self.preview_card.update_card(
+            app_name=self.var_game_name.get(),
+            details=self.var_details.get(),
+            state=self.var_state.get(),
+            large_image=self.var_large_img.get(),
+            large_text=self.var_large_txt.get(),
+            small_image=self.var_small_img.get(),
+            small_text=self.var_small_txt.get(),
+            show_timer=self.var_show_timer.get(),
+            elapsed_str=elapsed_str,
+            btn1_label=self.var_btn1_lbl.get(),
+            btn1_url=self.var_btn1_url.get(),
+            btn2_label=self.var_btn2_lbl.get(),
+            btn2_url=self.var_btn2_url.get()
+        )
+
+    def update_timer_loop(self):
+        self.update_live_preview()
+        self.after(1000, self.update_timer_loop)
+
+    def start_presence(self):
+        cid = self.var_client_id.get().strip()
+        if not cid or not cid.isdigit():
+            self.set_status("❌ Client ID غير صحيح! يجب أن يتكون من أرقام فقط (18-19 رقم).", color="#ed4245")
+            return
+
+        if cid == "123456789012345678":
+            self.set_status("⚠️ تنبيه: قم بتغيير Client ID إلى Application ID الخاص بك من موقع ديسكورد!", color="#fee75c")
+
+        self.set_status("🔄 جاري الاتصال بتطبيق ديسكورد على جهازك...", color="#fee75c")
+
+        def _connect_thread():
+            import asyncio
+            try:
+                asyncio.get_event_loop()
+            except RuntimeError:
+                asyncio.set_event_loop(asyncio.new_event_loop())
+
+            success = self.rpc_manager.connect(cid)
+            if success:
+                self.start_timestamp = time.time()
+                self._send_rpc_update()
+                self.after(0, lambda: self.set_status("🟢 الحالة تعمل الآن بنجاح على حسابك في ديسكورد!", color="#23a55a"))
+            else:
+                err_msg = self.rpc_manager.last_error
+                self.after(0, lambda err=err_msg: self.set_status(f"❌ {err}", color="#ed4245"))
+
+        threading.Thread(target=_connect_thread, daemon=True).start()
+
+    def update_presence_now(self):
+        if not self.rpc_manager.is_connected:
+            self.set_status("⚠️ Discord is not connected. Click Start first!", color="#fee75c")
+            return
+
+        def _update_thread():
+            success = self._send_rpc_update()
+            if success:
+                self.after(0, lambda: self.set_status("🟢 Rich Presence updated on Discord!", color="#23a55a"))
+            else:
+                err = self.rpc_manager.last_error
+                self.after(0, lambda err=err_msg: self.set_status(f"❌ Update failed: {err}", color="#ed4245"))
+
+        threading.Thread(target=_update_thread, daemon=True).start()
+
+    def _send_rpc_update(self) -> bool:
+        return self.rpc_manager.update_presence(
+            details=self.var_details.get(),
+            state=self.var_state.get(),
+            large_image=self.var_large_img.get(),
+            large_text=self.var_large_txt.get(),
+            small_image=self.var_small_img.get(),
+            small_text=self.var_small_txt.get(),
+            show_timer=self.var_show_timer.get(),
+            button1_label=self.var_btn1_lbl.get(),
+            button1_url=self.var_btn1_url.get(),
+            button2_label=self.var_btn2_lbl.get(),
+            button2_url=self.var_btn2_url.get(),
+            start_time=self.start_timestamp
+        )
+
+    def stop_presence(self):
+        self.rpc_manager.disconnect()
+        self.set_status("🔴 Discord Rich Presence stopped.", color="#ed4245")
+
+    def run_background_mode(self):
+        self.save_config()
+        vbs_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "start_background.vbs")
+
+        if os.path.exists(vbs_script):
+            subprocess.Popen(["wscript.exe", vbs_script], shell=True)
+            self.set_status("🌙 Presence launched silently in background! Closing GUI...", color="#5865f2")
+            self.after(1500, self.destroy)
+        else:
+            self.set_status("❌ start_background.vbs file not found!", color="#ed4245")
+
+
+if __name__ == "__main__":
+    app = OmarDevApp()
+    app.mainloop()
