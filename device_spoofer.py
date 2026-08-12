@@ -9,27 +9,29 @@ from typing import Optional, Tuple, Dict, Any
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-# Device Platform Configurations
+# Device Platform Configurations with exact Discord Gateway signatures
 PLATFORM_PRESETS = {
     "vr": {
-        "title": "🥽 VR Headset (Oculus Quest)",
+        "title": "🥽 VR Headset (Oculus Quest 3)",
         "os": "Android",
-        "browser": "Oculus Quest",
-        "device": "Oculus Quest 3",
-        "activity_name": "Virtual Reality VR 🥽",
-        "activity_details": "Exploring Virtual Reality",
-        "activity_state": "Oculus Quest Active",
-        "platform_key": "vr"
+        "browser": "Discord Embedded Client",
+        "device": "Meta Quest 3",
+        "activity_name": "Oculus Quest 3 VR 🥽",
+        "activity_details": "Exploring Virtual Reality 🥽",
+        "activity_state": "Meta Quest 3 Active",
+        "platform_key": "vr",
+        "flags": 1
     },
     "ps5": {
         "title": "🎮 PlayStation 5",
         "os": "PS5",
-        "browser": "PlayStation Network",
+        "browser": "Discord Client",
         "device": "PlayStation 5",
         "activity_name": "PlayStation 5 🎮",
         "activity_details": "Playing on PlayStation 5",
-        "activity_state": "PlayStation Network",
-        "platform_key": "ps5"
+        "activity_state": "PlayStation Network Active",
+        "platform_key": "ps5",
+        "flags": 0
     },
     "mobile": {
         "title": "📱 Mobile (iPhone / iOS)",
@@ -39,7 +41,8 @@ PLATFORM_PRESETS = {
         "activity_name": "Discord for iOS 📱",
         "activity_details": "Mobile Active",
         "activity_state": "iPhone 15 Pro",
-        "platform_key": "mobile"
+        "platform_key": "mobile",
+        "flags": 0
     },
     "xbox": {
         "title": "🟩 Xbox Series X",
@@ -49,7 +52,8 @@ PLATFORM_PRESETS = {
         "activity_name": "Xbox Network 🟩",
         "activity_details": "Playing on Xbox Series X",
         "activity_state": "Xbox Live Active",
-        "platform_key": "xbox"
+        "platform_key": "xbox",
+        "flags": 0
     }
 }
 
@@ -136,29 +140,34 @@ class DeviceSpooferWorker:
                     hello = json.loads(hello_raw)
                     heartbeat_interval = hello["d"]["heartbeat_interval"] / 1000.0
 
+                    activity_obj = {
+                        "name": preset["activity_name"],
+                        "type": 0,
+                        "details": details_txt,
+                        "state": preset["activity_state"],
+                        "platform": preset["platform_key"],
+                        "timestamps": {
+                            "start": start_ms
+                        }
+                    }
+                    if preset.get("flags"):
+                        activity_obj["flags"] = preset["flags"]
+
                     identify_payload = {
                         "op": 2,
                         "d": {
                             "token": auth_header,
-                            "capabilities": 125,
+                            "capabilities": 30717,
                             "properties": {
                                 "os": preset["os"],
                                 "browser": preset["browser"],
-                                "device": preset["device"]
+                                "device": preset["device"],
+                                "system_locale": "en-US"
                             },
                             "presence": {
                                 "status": self.status_type,
                                 "since": start_ms,
-                                "activities": [{
-                                    "name": preset["activity_name"],
-                                    "type": 0,
-                                    "details": details_txt,
-                                    "state": preset["activity_state"],
-                                    "platform": preset["platform_key"],
-                                    "timestamps": {
-                                        "start": start_ms
-                                    }
-                                }],
+                                "activities": [activity_obj],
                                 "afk": False
                             }
                         }
