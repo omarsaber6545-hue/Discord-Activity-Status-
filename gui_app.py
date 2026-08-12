@@ -14,6 +14,7 @@ from PIL import Image, ImageTk, ImageDraw
 from rpc_manager import DiscordRPCManager
 from voice_manager import verify_discord_token, VoiceStayWorker
 from afk_manager import AFKResponderWorker
+from device_spoofer import DeviceSpooferWorker, PLATFORM_PRESETS
 
 # Appearance settings
 ctk.set_appearance_mode("Dark")
@@ -349,14 +350,15 @@ class OmarDevApp(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("🎮 omar dev - Discord Rich Presence, Voice Stay & AFK Manager")
-        self.geometry("1120x840")
+        self.title("🎮 omar dev - Discord Rich Presence, VR, PS5, Voice Stay & AFK Manager")
+        self.geometry("1120x860")
         self.minsize(1000, 700)
 
         # Managers
         self.rpc_manager = DiscordRPCManager()
         self.voice_worker = VoiceStayWorker()
         self.afk_worker = AFKResponderWorker()
+        self.spoofer_worker = DeviceSpooferWorker()
         self.start_timestamp = time.time()
 
         # Load Configuration
@@ -379,8 +381,11 @@ class OmarDevApp(ctk.CTk):
         self.var_btn2_lbl = ctk.StringVar(value=curr_presence.get("button2_label", "Omar Dev Site"))
         self.var_btn2_url = ctk.StringVar(value=curr_presence.get("button2_url", "https://omar-dev.com"))
 
-        # Account Token & Voice / AFK Variables
+        # Account Token & Device / Voice / AFK Variables
         self.var_user_token = ctk.StringVar(value=self.config.get("user_token", ""))
+        self.var_device_platform = ctk.StringVar(value=self.config.get("device_platform", "vr"))
+        self.var_device_custom_text = ctk.StringVar(value=self.config.get("device_custom_text", ""))
+
         self.var_voice_channel_id = ctk.StringVar(value=self.config.get("voice_channel_id", ""))
         self.var_voice_deaf = ctk.BooleanVar(value=self.config.get("voice_deaf", True))
         self.var_voice_mute = ctk.BooleanVar(value=self.config.get("voice_mute", True))
@@ -427,6 +432,9 @@ class OmarDevApp(ctk.CTk):
         self.config["client_id"] = self.var_client_id.get().strip()
         self.config["game_name"] = self.var_game_name.get().strip()
         self.config["user_token"] = self.var_user_token.get().strip()
+        self.config["device_platform"] = self.var_device_platform.get().strip()
+        self.config["device_custom_text"] = self.var_device_custom_text.get().strip()
+
         self.config["voice_channel_id"] = self.var_voice_channel_id.get().strip()
         self.config["voice_deaf"] = self.var_voice_deaf.get()
         self.config["voice_mute"] = self.var_voice_mute.get()
@@ -467,7 +475,7 @@ class OmarDevApp(ctk.CTk):
 
         main_header = ctk.CTkLabel(
             title_frame,
-            text="🎮 omar dev - Rich Presence & AFK Manager",
+            text="🎮 omar dev - Rich Presence, VR & PS5 Manager",
             font=ctk.CTkFont(family="Segoe UI", size=22, weight="bold"),
             text_color="#5865f2"
         )
@@ -475,7 +483,7 @@ class OmarDevApp(ctk.CTk):
 
         sub_header = ctk.CTkLabel(
             title_frame,
-            text="Discord Rich Presence, 24/7 Voice Channel Stay & AFK Auto-Responder Manager",
+            text="Discord Rich Presence, VR Headset & PlayStation Badges, Voice 24/7 & AFK Manager",
             font=ctk.CTkFont(family="Segoe UI", size=12),
             text_color="#b5bac1"
         )
@@ -513,6 +521,68 @@ class OmarDevApp(ctk.CTk):
             command=self.verify_account_token
         )
         btn_verify_tok.pack(fill="x", padx=12, pady=(0, 10))
+
+        # Section: Device Platform Spoofer (VR & PlayStation Badges)
+        sec_spoofer = self._create_card_section(left_container, "🥽 VR Headset & PlayStation Device Badges")
+
+        lbl_plat = ctk.CTkLabel(sec_spoofer, text="Device Platform / نوع الجهاز المنصة:", font=ctk.CTkFont(size=12, weight="bold"))
+        lbl_plat.pack(anchor="w", padx=12, pady=(8, 2))
+
+        plat_map = {
+            "🥽 VR Headset (Oculus Quest 3)": "vr",
+            "🎮 PlayStation 5 (PS5)": "ps5",
+            "📱 Mobile (iPhone / iOS)": "mobile",
+            "🟩 Xbox Series X": "xbox"
+        }
+
+        current_key = self.var_device_platform.get()
+        default_val = "🥽 VR Headset (Oculus Quest 3)"
+        for k, v in plat_map.items():
+            if v == current_key:
+                default_val = k
+                break
+
+        self.spoofer_dropdown = ctk.CTkOptionMenu(
+            sec_spoofer,
+            values=list(plat_map.keys()),
+            fg_color="#5865f2",
+            button_color="#4752c4",
+            button_hover_color="#3c45a5",
+            font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"),
+            command=lambda selected: self.var_device_platform.set(plat_map.get(selected, "vr"))
+        )
+        self.spoofer_dropdown.set(default_val)
+        self.spoofer_dropdown.pack(fill="x", padx=12, pady=(0, 8))
+
+        lbl_sp_det = ctk.CTkLabel(sec_spoofer, text="Custom Status Details (تفاصيل نصية اختياري):", font=ctk.CTkFont(size=11))
+        lbl_sp_det.pack(anchor="w", padx=12, pady=(0, 2))
+
+        entry_sp_det = ctk.CTkEntry(sec_spoofer, textvariable=self.var_device_custom_text, placeholder_text="e.g. Exploring VR, Playing PS5...")
+        entry_sp_det.pack(fill="x", padx=12, pady=(0, 8))
+        setup_entry_context_menu(entry_sp_det)
+
+        spoofer_actions_frame = ctk.CTkFrame(sec_spoofer, fg_color="transparent")
+        spoofer_actions_frame.pack(fill="x", padx=12, pady=(4, 10))
+
+        btn_start_spoofer = ctk.CTkButton(
+            spoofer_actions_frame,
+            text="🚀 Activate Device Badge",
+            fg_color="#23a55a",
+            hover_color="#1a7f45",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            command=self.start_device_spoofer
+        )
+        btn_start_spoofer.pack(side="left", expand=True, fill="x", padx=(0, 4))
+
+        btn_stop_spoofer = ctk.CTkButton(
+            spoofer_actions_frame,
+            text="🛑 Stop Device Badge",
+            fg_color="#ed4245",
+            hover_color="#c03537",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            command=self.stop_device_spoofer
+        )
+        btn_stop_spoofer.pack(side="right", expand=True, fill="x", padx=(4, 0))
 
         # Game & Preset Selector Dropdown
         preset_frame = ctk.CTkFrame(left_container, fg_color="#2b2d31", corner_radius=10)
@@ -887,10 +957,10 @@ class OmarDevApp(ctk.CTk):
     def verify_account_token(self):
         tok = self.var_user_token.get().strip()
         if not tok:
-            self.set_status("❌ يرجى كتابة التوكين الخاص بالحساب أولاً!", color="#ed4245")
+            self.set_status("❌ Please enter your Token first!", color="#ed4245")
             return
 
-        self.set_status("🔄 جاري التحقق والتعرف على الحساب (OAuth identity check)...", color="#fee75c")
+        self.set_status("🔄 Verifying Account Token...", color="#fee75c")
 
         def _verify_thread():
             valid, msg, data = verify_discord_token(tok)
@@ -900,6 +970,26 @@ class OmarDevApp(ctk.CTk):
                 self.after(0, lambda: self.set_status(msg, color="#ed4245"))
 
         threading.Thread(target=_verify_thread, daemon=True).start()
+
+    def start_device_spoofer(self):
+        tok = self.var_user_token.get().strip()
+        plat = self.var_device_platform.get().strip()
+        cust = self.var_device_custom_text.get().strip()
+
+        ok, msg = self.spoofer_worker.start(
+            token=tok,
+            platform_mode=plat,
+            custom_details=cust
+        )
+
+        if ok:
+            self.set_status(msg, color="#23a55a")
+        else:
+            self.set_status(f"❌ {msg}", color="#ed4245")
+
+    def stop_device_spoofer(self):
+        self.spoofer_worker.stop()
+        self.set_status("🔴 Device Badge Spoofer Stopped.", color="#ed4245")
 
     def start_voice_stay(self):
         tok = self.var_user_token.get().strip()
@@ -919,7 +1009,7 @@ class OmarDevApp(ctk.CTk):
 
     def stop_voice_stay(self):
         self.voice_worker.stop()
-        self.set_status("🔴 تم إيقاف الخروج من الروم الصوتية.", color="#ed4245")
+        self.set_status("🔴 Voice Channel Stay Stopped.", color="#ed4245")
 
     def start_afk_responder(self):
         tok = self.var_user_token.get().strip()
@@ -939,7 +1029,7 @@ class OmarDevApp(ctk.CTk):
 
     def stop_afk_responder(self):
         self.afk_worker.stop()
-        self.set_status("🔴 تم إيقاف نظام الرد التلقائي (AFK Responder).", color="#ed4245")
+        self.set_status("🔴 AFK Auto-Responder Stopped.", color="#ed4245")
 
     def apply_preset(self, preset_name: str):
         presets = self.config.get("presets", {})
@@ -991,13 +1081,13 @@ class OmarDevApp(ctk.CTk):
     def start_presence(self):
         cid = self.var_client_id.get().strip()
         if not cid or not cid.isdigit():
-            self.set_status("❌ Client ID غير صحيح! يجب أن يتكون من أرقام فقط (18-19 رقم).", color="#ed4245")
+            self.set_status("❌ Client ID is invalid! Must contain digits only.", color="#ed4245")
             return
 
         if cid == "123456789012345678":
-            self.set_status("⚠️ تنبيه: قم بتغيير Client ID إلى Application ID الخاص بك من موقع ديسكورد!", color="#fee75c")
+            self.set_status("⚠️ Warning: Please change Client ID to your Discord Application ID!", color="#fee75c")
 
-        self.set_status("🔄 جاري الاتصال بتطبيق ديسكورد على جهازك...", color="#fee75c")
+        self.set_status("🔄 Connecting to Discord desktop client...", color="#fee75c")
 
         def _connect_thread():
             import asyncio
@@ -1010,7 +1100,7 @@ class OmarDevApp(ctk.CTk):
             if success:
                 self.start_timestamp = time.time()
                 self._send_rpc_update()
-                self.after(0, lambda: self.set_status("🟢 الحالة تعمل الآن بنجاح على حسابك في ديسكورد!", color="#23a55a"))
+                self.after(0, lambda: self.set_status("🟢 Rich Presence active on your Discord account!", color="#23a55a"))
             else:
                 err_msg = self.rpc_manager.last_error
                 self.after(0, lambda err=err_msg: self.set_status(f"❌ {err}", color="#ed4245"))
