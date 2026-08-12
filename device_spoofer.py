@@ -9,63 +9,69 @@ from typing import Optional, Tuple, Dict, Any
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-# Device Platform Configurations with exact Discord Gateway signatures
+# Device Platform Configurations with selectable status icons (Desktop 🖥️ / Mobile 📱)
 PLATFORM_PRESETS = {
-    "vr": {
-        "title": "🥽 VR Headset (Oculus Quest 3)",
-        "os": "Android",
-        "browser": "Discord Embedded Client",
-        "device": "Meta Quest 3",
+    "vr_desktop": {
+        "title": "🥽 VR Headset (Desktop 🖥️ Icon)",
+        "os": "Windows",
+        "browser": "Discord Client",
+        "device": "",
         "activity_name": "Oculus Quest 3 VR 🥽",
         "activity_details": "Exploring Virtual Reality 🥽",
         "activity_state": "Meta Quest 3 Active",
-        "platform_key": "vr",
-        "flags": 1
+        "platform_key": "vr"
     },
-    "ps5": {
-        "title": "🎮 PlayStation 5",
-        "os": "PS5",
+    "vr_mobile": {
+        "title": "🥽 VR Headset (Mobile 📱 Icon)",
+        "os": "Android",
+        "browser": "Discord Android",
+        "device": "Oculus Quest 3",
+        "activity_name": "Oculus Quest 3 VR 🥽",
+        "activity_details": "Exploring Virtual Reality 🥽",
+        "activity_state": "Meta Quest 3 Active",
+        "platform_key": "vr"
+    },
+    "ps5_desktop": {
+        "title": "🎮 PlayStation 5 (Desktop 🖥️ Icon)",
+        "os": "Windows",
         "browser": "Discord Client",
+        "device": "",
+        "activity_name": "PlayStation 5 🎮",
+        "activity_details": "Playing on PlayStation 5",
+        "activity_state": "PlayStation Network Active",
+        "platform_key": "ps5"
+    },
+    "ps5_mobile": {
+        "title": "🎮 PlayStation 5 (Mobile 📱 Icon)",
+        "os": "Android",
+        "browser": "Discord Android",
         "device": "PlayStation 5",
         "activity_name": "PlayStation 5 🎮",
         "activity_details": "Playing on PlayStation 5",
         "activity_state": "PlayStation Network Active",
-        "platform_key": "ps5",
-        "flags": 0
+        "platform_key": "ps5"
     },
     "mobile": {
-        "title": "📱 Mobile (iPhone / iOS)",
-        "os": "iOS",
-        "browser": "Discord iOS",
-        "device": "iPhone 15 Pro",
-        "activity_name": "Discord for iOS 📱",
+        "title": "📱 Mobile Phone (iPhone / Android 📱 Icon)",
+        "os": "Android",
+        "browser": "Discord Android",
+        "device": "Samsung Galaxy S24",
+        "activity_name": "Discord for Mobile 📱",
         "activity_details": "Mobile Active",
-        "activity_state": "iPhone 15 Pro",
-        "platform_key": "mobile",
-        "flags": 0
-    },
-    "xbox": {
-        "title": "🟩 Xbox Series X",
-        "os": "Xbox",
-        "browser": "Discord Client",
-        "device": "Xbox Series X",
-        "activity_name": "Xbox Network 🟩",
-        "activity_details": "Playing on Xbox Series X",
-        "activity_state": "Xbox Live Active",
-        "platform_key": "xbox",
-        "flags": 0
+        "activity_state": "Mobile Online",
+        "platform_key": "mobile"
     }
 }
 
 
 class DeviceSpooferWorker:
-    """Manages Gateway WebSocket session to spoof VR / PlayStation / Mobile device badges."""
+    """Manages Gateway WebSocket session to spoof VR / PlayStation / Mobile device status icons."""
 
     def __init__(self):
         self.is_running = False
         self.is_connected = False
         self.token = ""
-        self.platform_mode = "vr"
+        self.platform_mode = "vr_desktop"
         self.custom_details = ""
         self.status_type = "online"
         self.status_message = "🔴 Device Spoofer Stopped"
@@ -78,7 +84,7 @@ class DeviceSpooferWorker:
     def start(
         self,
         token: str,
-        platform_mode: str = "vr",
+        platform_mode: str = "vr_desktop",
         custom_details: str = "",
         status_type: str = "online"
     ) -> Tuple[bool, str]:
@@ -89,7 +95,7 @@ class DeviceSpooferWorker:
         self.token = token.strip()
         self.platform_mode = platform_mode.lower().strip()
         if self.platform_mode not in PLATFORM_PRESETS:
-            self.platform_mode = "vr"
+            self.platform_mode = "vr_desktop"
 
         self.custom_details = custom_details.strip()
         self.status_type = status_type.strip() if status_type.strip() in ("online", "idle", "dnd") else "online"
@@ -101,11 +107,11 @@ class DeviceSpooferWorker:
         self.is_running = True
         self.start_time = time.time()
         preset_info = PLATFORM_PRESETS[self.platform_mode]
-        self.status_message = f"🔄 Activating {preset_info['title']} Device Badge..."
+        self.status_message = f"🔄 Activating {preset_info['title']} Device Status Icon..."
 
         self.worker_thread = threading.Thread(target=self._run_spoofer_loop, daemon=True)
         self.worker_thread.start()
-        return True, f"🚀 Activating Device Badge: {preset_info['title']}"
+        return True, f"🚀 Activating Status Icon: {preset_info['title']}"
 
     def _run_spoofer_loop(self):
         """Asyncio loop running Gateway WebSocket session with spoofed device properties."""
@@ -127,7 +133,7 @@ class DeviceSpooferWorker:
 
         auth_header = self.token if not self.token.startswith("Bot ") else self.token
         gateway_url = "wss://gateway.discord.gg/?v=9&encoding=json"
-        preset = PLATFORM_PRESETS.get(self.platform_mode, PLATFORM_PRESETS["vr"])
+        preset = PLATFORM_PRESETS.get(self.platform_mode, PLATFORM_PRESETS["vr_desktop"])
 
         details_txt = self.custom_details if self.custom_details else preset["activity_details"]
         start_ms = int(self.start_time * 1000)
@@ -150,19 +156,16 @@ class DeviceSpooferWorker:
                             "start": start_ms
                         }
                     }
-                    if preset.get("flags"):
-                        activity_obj["flags"] = preset["flags"]
 
                     identify_payload = {
                         "op": 2,
                         "d": {
                             "token": auth_header,
-                            "capabilities": 30717,
+                            "capabilities": 125,
                             "properties": {
                                 "os": preset["os"],
                                 "browser": preset["browser"],
-                                "device": preset["device"],
-                                "system_locale": "en-US"
+                                "device": preset["device"]
                             },
                             "presence": {
                                 "status": self.status_type,
@@ -196,19 +199,19 @@ class DeviceSpooferWorker:
                                 username = user_obj.get("username", "Account")
                                 self.user_tag = username
                                 self.is_connected = True
-                                self.status_message = f"🟢 Device Badge Active: {preset['title']} ({self.user_tag})"
+                                self.status_message = f"🟢 Device Status Icon Active: {preset['title']} ({self.user_tag})"
                                 logging.info(f"Device Spoofer READY: {preset['title']} for {self.user_tag}")
 
                             elif op == 1:
                                 await ws.send(json.dumps({"op": 1, "d": None}))
 
-                        except asyncio.TimeoutError:
+                        except asyncioTimeoutError:
                             pass
 
             except Exception as e:
                 logging.warning(f"Device spoofer reconnect pulse: {e}. Reconnecting in 3s...")
                 self.is_connected = False
-                self.status_message = f"🔄 Reconnecting {preset['title']} Badge..."
+                self.status_message = f"🔄 Reconnecting {preset['title']}..."
                 await asyncio.sleep(3)
 
     def stop(self):
