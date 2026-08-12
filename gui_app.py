@@ -131,62 +131,94 @@ def setup_entry_context_menu(entry_widget):
 
 
 class DiscordPreviewCard(ctk.CTkFrame):
-    """Component that renders a real-time visual mock of the Discord Activity Card."""
+    """Modern, high-fidelity visual preview of the Discord Activity Card."""
 
     def __init__(self, master, **kwargs):
-        super().__init__(master, fg_color="#1e1f22", corner_radius=12, **kwargs)
+        super().__init__(
+            master,
+            fg_color="#111214",
+            corner_radius=14,
+            border_width=1,
+            border_color="#2b2d31",
+            **kwargs
+        )
 
         # Title / Activity Status Header
+        self.header_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.header_frame.pack(fill="x", padx=16, pady=(14, 8))
+
         self.header_label = ctk.CTkLabel(
-            self,
-            text="LIVE DISCORD CARD PREVIEW",
+            self.header_frame,
+            text="⚡ LIVE DISCORD CARD PREVIEW",
             font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
             text_color="#949ba4"
         )
-        self.header_label.pack(anchor="w", padx=16, pady=(14, 6))
+        self.header_label.pack(anchor="w")
 
-        # Main Discord Profile Activity Box
-        self.card_bg = ctk.CTkFrame(self, fg_color="#2b2d31", corner_radius=10)
+        # Main Activity Card Container
+        self.card_bg = ctk.CTkFrame(
+            self,
+            fg_color="#2b2d31",
+            corner_radius=12,
+            border_width=1,
+            border_color="#35363c"
+        )
         self.card_bg.pack(fill="both", expand=True, padx=14, pady=(0, 14))
 
         # Activity Title Header ("PLAYING A GAME")
         self.activity_type = ctk.CTkLabel(
             self.card_bg,
-            text="PLAYING A GAME",
-            font=ctk.CTkFont(family="Segoe UI", size=10, weight="bold"),
+            text="🎮 PLAYING A GAME",
+            font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
             text_color="#b5bac1"
         )
-        self.activity_type.pack(anchor="w", padx=14, pady=(12, 8))
+        self.activity_type.pack(anchor="w", padx=16, pady=(14, 10))
 
-        # Horizontal layout for Icons & Info
+        # Horizontal Body Frame for Icon & Details
         self.body_frame = ctk.CTkFrame(self.card_bg, fg_color="transparent")
-        self.body_frame.pack(fill="x", padx=14, pady=0)
+        self.body_frame.pack(fill="x", padx=16, pady=0)
 
-        # Image Container Frame
-        self.image_container = ctk.CTkFrame(self.body_frame, fg_color="transparent", width=80, height=80)
-        self.image_container.pack(side="left", anchor="n", padx=(0, 12))
+        # Image Container (Large + Small Overlay)
+        self.image_container = ctk.CTkFrame(self.body_frame, fg_color="transparent", width=82, height=82)
+        self.image_container.pack(side="left", anchor="n", padx=(0, 14))
 
-        # Large Image Label
-        self.large_img_label = ctk.CTkLabel(
+        # Large Image Placeholder Frame
+        self.large_img_frame = ctk.CTkFrame(
             self.image_container,
-            text="",
-            width=70,
-            height=70,
-            fg_color="#111214",
-            corner_radius=8
-        )
-        self.large_img_label.place(x=0, y=0)
-
-        # Small Image Label
-        self.small_img_label = ctk.CTkLabel(
-            self.image_container,
-            text="",
-            width=26,
-            height=26,
+            width=74,
+            height=74,
             fg_color="#5865f2",
-            corner_radius=13
+            corner_radius=14
         )
-        self.small_img_label.place(x=48, y=48)
+        self.large_img_frame.place(x=0, y=0)
+
+        self.large_img_label = ctk.CTkLabel(
+            self.large_img_frame,
+            text="🎮",
+            font=ctk.CTkFont(size=32),
+            text_color="#ffffff"
+        )
+        self.large_img_label.place(relx=0.5, rely=0.5, anchor="center")
+
+        # Small Image Overlay Badge
+        self.small_img_frame = ctk.CTkFrame(
+            self.image_container,
+            width=28,
+            height=28,
+            fg_color="#23a55a",
+            corner_radius=14,
+            border_width=2,
+            border_color="#2b2d31"
+        )
+        self.small_img_frame.place(x=52, y=52)
+
+        self.small_img_label = ctk.CTkLabel(
+            self.small_img_frame,
+            text="✨",
+            font=ctk.CTkFont(size=12),
+            text_color="#ffffff"
+        )
+        self.small_img_label.place(relx=0.5, rely=0.5, anchor="center")
 
         # Text Details Container
         self.text_frame = ctk.CTkFrame(self.body_frame, fg_color="transparent")
@@ -196,8 +228,8 @@ class DiscordPreviewCard(ctk.CTkFrame):
         self.game_title = ctk.CTkLabel(
             self.text_frame,
             text="omar dev",
-            font=ctk.CTkFont(family="Segoe UI", size=14, weight="bold"),
-            text_color="#f2f3f5",
+            font=ctk.CTkFont(family="Segoe UI", size=15, weight="bold"),
+            text_color="#ffffff",
             anchor="w"
         )
         self.game_title.pack(fill="x", pady=(0, 2))
@@ -225,25 +257,25 @@ class DiscordPreviewCard(ctk.CTkFrame):
         # Timer Line
         self.timer_label = ctk.CTkLabel(
             self.text_frame,
-            text="00:00:00 elapsed",
+            text="⏱️ 00:00:00 elapsed",
             font=ctk.CTkFont(family="Segoe UI", size=11),
             text_color="#949ba4",
             anchor="w"
         )
-        self.timer_label.pack(fill="x", pady=(2, 0))
+        self.timer_label.pack(fill="x", pady=(3, 0))
 
-        # Buttons Frame inside Card
+        # Interactive Buttons Frame inside Activity Card
         self.buttons_frame = ctk.CTkFrame(self.card_bg, fg_color="transparent")
-        self.buttons_frame.pack(fill="x", padx=14, pady=(12, 14))
+        self.buttons_frame.pack(fill="x", padx=16, pady=(14, 16))
 
         self.btn1_preview = ctk.CTkButton(
             self.buttons_frame,
-            text="GitHub Profile",
+            text="🔗 GitHub Profile",
             fg_color="#4e5058",
-            hover_color="#6d6f78",
+            hover_color="#5d6069",
             text_color="#ffffff",
-            height=32,
-            corner_radius=4,
+            height=34,
+            corner_radius=6,
             font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
             command=lambda: self._open_url(self.btn1_url)
         )
@@ -251,30 +283,16 @@ class DiscordPreviewCard(ctk.CTkFrame):
 
         self.btn2_preview = ctk.CTkButton(
             self.buttons_frame,
-            text="Omar Dev Site",
+            text="🌐 Omar Dev Site",
             fg_color="#4e5058",
-            hover_color="#6d6f78",
+            hover_color="#5d6069",
             text_color="#ffffff",
-            height=32,
-            corner_radius=4,
+            height=34,
+            corner_radius=6,
             font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
             command=lambda: self._open_url(self.btn2_url)
         )
         self.btn2_url = ""
-
-        # Default Placeholder Icons
-        self.default_large_icon = self._create_placeholder_image(70, 70, "#5865f2", "🎮")
-        self.default_small_icon = self._create_placeholder_image(26, 26, "#23a55a", "✨")
-
-        self.large_img_label.configure(image=self.default_large_icon)
-        self.small_img_label.configure(image=self.default_small_icon)
-
-    def _create_placeholder_image(self, width: int, height: int, bg_color: str, symbol: str):
-        """Draws a round-rect placeholder icon with a symbol."""
-        img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(img)
-        draw.rounded_rectangle([0, 0, width, height], radius=10, fill=bg_color)
-        return ctk.CTkImage(light_image=img, dark_image=img, size=(width, height))
 
     def _open_url(self, url: str):
         if url and url.startswith(("http://", "https://")):
@@ -311,15 +329,15 @@ class DiscordPreviewCard(ctk.CTkFrame):
             self.state_label.pack_forget()
 
         if show_timer:
-            self.timer_label.configure(text=f"{elapsed_str} elapsed")
-            self.timer_label.pack(fill="x", pady=(2, 0))
+            self.timer_label.configure(text=f"⏱️ {elapsed_str} elapsed")
+            self.timer_label.pack(fill="x", pady=(3, 0))
         else:
             self.timer_label.pack_forget()
 
         if small_image.strip():
-            self.small_img_label.place(x=48, y=48)
+            self.small_img_frame.place(x=52, y=52)
         else:
-            self.small_img_label.place_forget()
+            self.small_img_frame.place_forget()
 
         self.btn1_url = btn1_url.strip()
         self.btn2_url = btn2_url.strip()
@@ -328,18 +346,18 @@ class DiscordPreviewCard(ctk.CTkFrame):
         has_b2 = bool(btn2_label.strip() and btn2_url.strip())
 
         if has_b1 or has_b2:
-            self.buttons_frame.pack(fill="x", padx=14, pady=(12, 14))
+            self.buttons_frame.pack(fill="x", padx=16, pady=(14, 16))
         else:
             self.buttons_frame.pack_forget()
 
         if has_b1:
-            self.btn1_preview.configure(text=btn1_label.strip())
+            self.btn1_preview.configure(text=f"🔗 {btn1_label.strip()}")
             self.btn1_preview.pack(fill="x", pady=(0, 6) if has_b2 else 0)
         else:
             self.btn1_preview.pack_forget()
 
         if has_b2:
-            self.btn2_preview.configure(text=btn2_label.strip())
+            self.btn2_preview.configure(text=f"🌐 {btn2_label.strip()}")
             self.btn2_preview.pack(fill="x", pady=0)
         else:
             self.btn2_preview.pack_forget()
@@ -351,7 +369,7 @@ class OmarDevApp(ctk.CTk):
         super().__init__()
 
         self.title("🎮 omar dev - Discord Rich Presence, VR, PS5, Voice Stay & AFK Manager")
-        self.geometry("1120x860")
+        self.geometry("1140x880")
         self.minsize(1000, 700)
 
         # Managers
@@ -895,37 +913,98 @@ class OmarDevApp(ctk.CTk):
         right_container = ctk.CTkFrame(self, fg_color="transparent")
         right_container.grid(row=0, column=1, sticky="nsew", padx=(8, 16), pady=16)
 
-        # Discord User Card Mock Outer Frame
-        user_card_frame = ctk.CTkFrame(right_container, fg_color="#18191c", corner_radius=14)
+        # Discord Profile Outer Glass Frame
+        user_card_frame = ctk.CTkFrame(
+            right_container,
+            fg_color="#18191c",
+            corner_radius=16,
+            border_width=1,
+            border_color="#2b2d31"
+        )
         user_card_frame.pack(fill="both", expand=True)
 
-        # Banner Graphic Header
-        banner = ctk.CTkFrame(user_card_frame, fg_color="#5865f2", height=90, corner_radius=0)
+        # Modern Gradient Banner Header
+        banner = ctk.CTkFrame(
+            user_card_frame,
+            fg_color="#5865f2",
+            height=105,
+            corner_radius=0
+        )
         banner.pack(fill="x", side="top")
 
-        # Avatar Profile Circle Simulation
-        avatar_frame = ctk.CTkFrame(user_card_frame, fg_color="#2b2d31", width=74, height=74, corner_radius=37)
-        avatar_frame.place(x=20, y=50)
+        # Avatar Outer Circle Frame with Online Status Dot
+        avatar_outer = ctk.CTkFrame(
+            user_card_frame,
+            fg_color="#18191c",
+            width=84,
+            height=84,
+            corner_radius=42
+        )
+        avatar_outer.place(x=18, y=60)
 
-        avatar_inner = ctk.CTkLabel(avatar_frame, text="😎", font=ctk.CTkFont(size=36))
+        avatar_inner = ctk.CTkFrame(
+            avatar_outer,
+            fg_color="#5865f2",
+            width=76,
+            height=76,
+            corner_radius=38
+        )
         avatar_inner.place(relx=0.5, rely=0.5, anchor="center")
 
-        # User identity label
+        avatar_emoji = ctk.CTkLabel(
+            avatar_inner,
+            text="😎",
+            font=ctk.CTkFont(size=38)
+        )
+        avatar_emoji.place(relx=0.5, rely=0.5, anchor="center")
+
+        # Online Status Indicator Dot (🟢)
+        status_dot = ctk.CTkFrame(
+            avatar_outer,
+            fg_color="#23a55a",
+            width=20,
+            height=20,
+            corner_radius=10,
+            border_width=3,
+            border_color="#18191c"
+        )
+        status_dot.place(x=58, y=58)
+
+        # Profile Information Section
+        info_frame = ctk.CTkFrame(user_card_frame, fg_color="transparent")
+        info_frame.pack(fill="x", padx=20, pady=(55, 6))
+
         user_name = ctk.CTkLabel(
-            user_card_frame,
+            info_frame,
             text="omar dev",
-            font=ctk.CTkFont(family="Segoe UI", size=18, weight="bold"),
+            font=ctk.CTkFont(family="Segoe UI", size=20, weight="bold"),
             text_color="#ffffff"
         )
-        user_name.pack(anchor="w", padx=20, pady=(45, 0))
+        user_name.pack(anchor="w")
 
         user_tag = ctk.CTkLabel(
-            user_card_frame,
+            info_frame,
             text="omar_dev_official",
-            font=ctk.CTkFont(family="Segoe UI", size=12),
+            font=ctk.CTkFont(family="Segoe UI", size=13),
             text_color="#949ba4"
         )
-        user_tag.pack(anchor="w", padx=20, pady=(0, 14))
+        user_tag.pack(anchor="w", pady=(0, 6))
+
+        # Badges Bar (Active Developer, VR Headset, PlayStation, Nitro)
+        badges_frame = ctk.CTkFrame(info_frame, fg_color="transparent")
+        badges_frame.pack(anchor="w", pady=(0, 10))
+
+        b1 = ctk.CTkLabel(badges_frame, text="👨‍💻 Active Dev", fg_color="#2b2d31", text_color="#5865f2", corner_radius=6, font=ctk.CTkFont(size=10, weight="bold"))
+        b1.pack(side="left", padx=(0, 4), ipadx=6, ipady=2)
+
+        b2 = ctk.CTkLabel(badges_frame, text="🥽 VR Quest", fg_color="#2b2d31", text_color="#fee75c", corner_radius=6, font=ctk.CTkFont(size=10, weight="bold"))
+        b2.pack(side="left", padx=(0, 4), ipadx=6, ipady=2)
+
+        b3 = ctk.CTkLabel(badges_frame, text="🎮 PS5", fg_color="#2b2d31", text_color="#00439c", corner_radius=6, font=ctk.CTkFont(size=10, weight="bold"))
+        b3.pack(side="left", padx=(0, 4), ipadx=6, ipady=2)
+
+        b4 = ctk.CTkLabel(badges_frame, text="💎 Nitro", fg_color="#2b2d31", text_color="#eb459e", corner_radius=6, font=ctk.CTkFont(size=10, weight="bold"))
+        b4.pack(side="left", ipadx=6, ipady=2)
 
         # Live Card Preview Component
         self.preview_card = DiscordPreviewCard(user_card_frame)
