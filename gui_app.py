@@ -401,7 +401,7 @@ class OmarDevApp(ctk.CTk):
 
         # Account Token & Device / Voice / AFK Variables
         self.var_user_token = ctk.StringVar(value=self.config.get("user_token", ""))
-        self.var_device_platform = ctk.StringVar(value=self.config.get("device_platform", "vr"))
+        self.var_device_platform = ctk.StringVar(value=self.config.get("device_platform", "ps5"))
         self.var_device_custom_text = ctk.StringVar(value=self.config.get("device_custom_text", ""))
 
         self.var_voice_channel_id = ctk.StringVar(value=self.config.get("voice_channel_id", ""))
@@ -540,21 +540,20 @@ class OmarDevApp(ctk.CTk):
         )
         btn_verify_tok.pack(fill="x", padx=12, pady=(0, 10))
 
-        # Section: Device Platform Spoofer (VR & PlayStation Badges)
-        sec_spoofer = self._create_card_section(left_container, "🥽 VR Headset & PlayStation Device Badges")
+        # Section: Device Platform Spoofer (PlayStation & Mobile Badges)
+        sec_spoofer = self._create_card_section(left_container, "🎮 PlayStation 5 & Console Device Badges")
 
         lbl_plat = ctk.CTkLabel(sec_spoofer, text="Device Platform / نوع الجهاز المنصة:", font=ctk.CTkFont(size=12, weight="bold"))
         lbl_plat.pack(anchor="w", padx=12, pady=(8, 2))
 
         plat_map = {
-            "🥽 VR Headset (Oculus Quest)": "vr",
             "🎮 PlayStation 5": "ps5",
-            "📱 Mobile (iPhone / Android)": "mobile",
+            "📱 Mobile Phone (iPhone / Android)": "mobile",
             "🟩 Xbox Series X": "xbox"
         }
 
         current_key = self.var_device_platform.get()
-        default_val = "🥽 VR Headset (Oculus Quest)"
+        default_val = "🎮 PlayStation 5"
         for k, v in plat_map.items():
             if v == current_key:
                 default_val = k
@@ -567,7 +566,7 @@ class OmarDevApp(ctk.CTk):
             button_color="#4752c4",
             button_hover_color="#3c45a5",
             font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"),
-            command=lambda selected: self.var_device_platform.set(plat_map.get(selected, "vr"))
+            command=lambda selected: self.var_device_platform.set(plat_map.get(selected, "ps5"))
         )
         self.spoofer_dropdown.set(default_val)
         self.spoofer_dropdown.pack(fill="x", padx=12, pady=(0, 8))
@@ -990,15 +989,12 @@ class OmarDevApp(ctk.CTk):
         )
         user_tag.pack(anchor="w", pady=(0, 6))
 
-        # Badges Bar (Active Developer, VR Headset, PlayStation, Nitro)
+        # Badges Bar (Active Developer, PlayStation, Nitro)
         badges_frame = ctk.CTkFrame(info_frame, fg_color="transparent")
         badges_frame.pack(anchor="w", pady=(0, 10))
 
         b1 = ctk.CTkLabel(badges_frame, text="👨‍💻 Active Dev", fg_color="#2b2d31", text_color="#5865f2", corner_radius=6, font=ctk.CTkFont(size=10, weight="bold"))
         b1.pack(side="left", padx=(0, 4), ipadx=6, ipady=2)
-
-        b2 = ctk.CTkLabel(badges_frame, text="🥽 VR Quest", fg_color="#2b2d31", text_color="#fee75c", corner_radius=6, font=ctk.CTkFont(size=10, weight="bold"))
-        b2.pack(side="left", padx=(0, 4), ipadx=6, ipady=2)
 
         b3 = ctk.CTkLabel(badges_frame, text="🎮 PS5", fg_color="#2b2d31", text_color="#00439c", corner_radius=6, font=ctk.CTkFont(size=10, weight="bold"))
         b3.pack(side="left", padx=(0, 4), ipadx=6, ipady=2)

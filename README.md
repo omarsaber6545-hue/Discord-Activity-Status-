@@ -1,19 +1,18 @@
-# 🎮 omar dev - Discord Rich Presence, VR, PS5, Voice Stay & AFK Manager (v2.1) 🚀
+# 🎮 omar dev - Discord Rich Presence, PlayStation, Voice Stay & AFK Manager (v2.2) 🚀
 
-برنامج احترافي، متكامل ومتقدم لإدارة حالة لعب وتواجد **omar dev** على حسابك في ديسكورد، مع نظام إظهار أيقونة نظارة الواقع الافتراضي VR والبلايستيشن 5 (Device Badges)، نظام الإقامة الاستثنائية 24/7 بالروم الصوتية، ونظام الرد التلقائي عند المنشن والرسائل الخاصة (AFK Auto-Responder)!
+برنامج احترافي، متكامل ومتقدم لإدارة حالة لعب وتواجد **omar dev** على حسابك في ديسكورد، مع نظام إظهار أيقونة البلايستيشن 5 والمنصات (PlayStation & Device Badges)، نظام الإقامة الاستثنائية 24/7 بالروم الصوتية، ونظام الرد التلقائي عند المنشن والرسائل الخاصة (AFK Auto-Responder)!
 
 > 👨‍💻 **المطور الرسمي (Developer):** **Dark** 🔥  
-> 🏷️ **الإصدار الحالي:** **v2.1**
+> 🏷️ **الإصدار الحالي:** **v2.2**
 
 ---
 
-## 🌟 مميزات التحديث الجديد (v2.1 New Features)
+## 🌟 المميزات المتاحة في الإصدار (Features)
 
-### 🥽 1. إظهار أيقونة نظارة VR والبلايستيشن (VR & PlayStation Device Badges)
-- **وحدة مستقلة [`device_spoofer.py`](file:///c:/Users/omars/OneDrive/Desktop/New%20folder/device_spoofer.py)**: ربط مباشر مع بوابة ديسكورد Gateway لإظهار أيقونة الجهاز على حسابك.
-- **🥽 وضع VR Headset (Oculus Quest 3)**: إظهار أيقونة نظارة الواقع الافتراضي 🥽 بجانب اسمك في ديسكورد.
+### 🎮 1. إظهار أيقونة البلايستيشن والجوال (PlayStation & Device Badges)
+- **وحدة مستقلة [`device_spoofer.py`](file:///c:/Users/omars/OneDrive/Desktop/New%20folder/device_spoofer.py)**: ربط مباشر مع بوابة ديسكورد Gateway لإظهار أيقونة الجهاز المنصة على حسابك.
 - **🎮 وضع PlayStation 5**: إظهار أيقونة وتتواجد البلايستيشن 5 🎮 على بروفايلك بحسابك الشخصي.
-- **📱 وضع الجوال والـ Xbox**: خيارات إضافية لإظهار أيقونة هاتف iPhone أو منصة Xbox Series X.
+- **📱 وضع الجوال والـ Xbox**: خيارات إضافية لإظهار أيقونة هاتف iPhone/Android أو منصة Xbox Series X.
 
 ### 🎙️ 2. نظام الإقامة بالروم الصوتية 24/7 (24/7 Voice Channel Stay)
 - **اتصال مباشر عبر Gateway WebSocket**: وحدة مستقلة [`voice_manager.py`](file:///c:/Users/omars/OneDrive/Desktop/New%20folder/voice_manager.py) تبقيك ثابتاً ومستقراً داخل أي روم صوتية دون الخروج حتى إيقاف البرنامج أو إغلاق الكمبيوتر.
@@ -54,9 +53,9 @@
 ## 📂 هيكل الملفات (Project Structure)
 
 ```text
-├── gui_app.py            # الواجهة الرسومية التفاعلية المحدثة (v2.1)
+├── gui_app.py            # الواجهة الرسومية التفاعلية المحدثة (v2.2)
 ├── rpc_manager.py        # محرك الربط المباشر مع ديسكورد Rich Presence
-├── device_spoofer.py     # نظام إظهار أيقونة الـ VR والبلايستيشن والمنصات
+├── device_spoofer.py     # نظام إظهار أيقونة البلايستيشن والمنصات
 ├── voice_manager.py      # نظام الإقامة بالروم الصوتية 24/7 عبر Gateway WebSocket
 ├── afk_manager.py        # نظام الرد التلقائي عند الـ AFK للخاص والمنشن
 ├── cli_launcher.py       # مشغل سطر الأوامر والخلفية المحدث
@@ -64,7 +63,7 @@
 ├── start.bat             # مشغل الدفعة التلقائي
 ├── start_background.vbs  # مشغل الخلفية الصامت
 ├── requirements.txt      # ملف المكتبات المطلوبة
-└── README.md             # دليل الاستخدام والتوثيق المحدث لـ v2.1
+└── README.md             # دليل الاستخدام والتوثيق المحدث لـ v2.2
 ```
 
 ---
