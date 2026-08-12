@@ -547,17 +547,14 @@ class OmarDevApp(ctk.CTk):
         lbl_plat.pack(anchor="w", padx=12, pady=(8, 2))
 
         plat_map = {
-            "🥽 VR Headset (Discord Oculus Signature - أيقونة VR)": "vr_oculus",
-            "🥽 VR Headset (Discord VR Signature)": "vr_discord_vr",
-            "🥽 VR Headset (Desktop 🖥️ Icon - أيقونة كمبيوتر)": "vr_desktop",
-            "🥽 VR Headset (Mobile 📱 Icon - أيقونة موبايل)": "vr_mobile",
-            "🎮 PlayStation 5 (Desktop 🖥️ Icon - أيقونة كمبيوتر)": "ps5_desktop",
-            "🎮 PlayStation 5 (Mobile 📱 Icon - أيقونة موبايل)": "ps5_mobile",
-            "📱 Mobile Phone (iPhone / Android 📱 Icon)": "mobile"
+            "🥽 VR Headset (Oculus Quest)": "vr",
+            "🎮 PlayStation 5": "ps5",
+            "📱 Mobile (iPhone / Android)": "mobile",
+            "🟩 Xbox Series X": "xbox"
         }
 
         current_key = self.var_device_platform.get()
-        default_val = "🥽 VR Headset (Discord Oculus Signature - أيقونة VR)"
+        default_val = "🥽 VR Headset (Oculus Quest)"
         for k, v in plat_map.items():
             if v == current_key:
                 default_val = k
@@ -570,7 +567,7 @@ class OmarDevApp(ctk.CTk):
             button_color="#4752c4",
             button_hover_color="#3c45a5",
             font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"),
-            command=lambda selected: self.var_device_platform.set(plat_map.get(selected, "vr_oculus"))
+            command=lambda selected: self.var_device_platform.set(plat_map.get(selected, "vr"))
         )
         self.spoofer_dropdown.set(default_val)
         self.spoofer_dropdown.pack(fill="x", padx=12, pady=(0, 8))
