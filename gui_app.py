@@ -12,6 +12,8 @@ import customtkinter as ctk
 from PIL import Image, ImageTk, ImageDraw
 
 from rpc_manager import DiscordRPCManager
+from voice_manager import verify_discord_token, VoiceStayWorker
+from afk_manager import AFKResponderWorker
 
 # Appearance settings
 ctk.set_appearance_mode("Dark")
@@ -103,7 +105,6 @@ def setup_entry_context_menu(entry_widget):
         entry_widget.bind("<Button-3>", _popup_menu)
 
     def _on_key_press(event):
-        # event.state & 4 checks if Control key is held down
         if event.state & 4:
             if event.keycode == 86 or event.keysym.lower() in ("v", "r"):
                 return _do_paste(event)
@@ -296,7 +297,6 @@ class DiscordPreviewCard(ctk.CTkFrame):
     ):
         self.game_title.configure(text=app_name if app_name else "omar dev")
 
-        # Hide empty details/state
         if details.strip():
             self.details_label.configure(text=details.strip())
             self.details_label.pack(fill="x", pady=0)
@@ -315,13 +315,11 @@ class DiscordPreviewCard(ctk.CTkFrame):
         else:
             self.timer_label.pack_forget()
 
-        # Update small image visibility
         if small_image.strip():
             self.small_img_label.place(x=48, y=48)
         else:
             self.small_img_label.place_forget()
 
-        # Update preview buttons
         self.btn1_url = btn1_url.strip()
         self.btn2_url = btn2_url.strip()
 
@@ -351,12 +349,14 @@ class OmarDevApp(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("🎮 omar dev - Discord Rich Presence & Games Selector")
-        self.geometry("1080x740")
-        self.minsize(980, 660)
+        self.title("🎮 omar dev - Discord Rich Presence, Voice Stay & AFK Manager")
+        self.geometry("1120x840")
+        self.minsize(1000, 700)
 
-        # Discord RPC instance
+        # Managers
         self.rpc_manager = DiscordRPCManager()
+        self.voice_worker = VoiceStayWorker()
+        self.afk_worker = AFKResponderWorker()
         self.start_timestamp = time.time()
 
         # Load Configuration
@@ -364,7 +364,7 @@ class OmarDevApp(ctk.CTk):
 
         # Observable Variables
         curr_presence = self.config.get("current_presence", {})
-        self.var_client_id = ctk.StringVar(value=self.config.get("client_id", "1529031652255203438"))
+        self.var_client_id = ctk.StringVar(value=self.config.get("client_id", "1536494151074586624"))
         self.var_game_name = ctk.StringVar(value=curr_presence.get("game_name", "omar dev"))
         self.var_details = ctk.StringVar(value=curr_presence.get("details", "Writing code in VS Code"))
         self.var_state = ctk.StringVar(value=curr_presence.get("state", "Developing awesome apps 🚀"))
@@ -378,6 +378,16 @@ class OmarDevApp(ctk.CTk):
         self.var_btn1_url = ctk.StringVar(value=curr_presence.get("button1_url", "https://github.com"))
         self.var_btn2_lbl = ctk.StringVar(value=curr_presence.get("button2_label", "Omar Dev Site"))
         self.var_btn2_url = ctk.StringVar(value=curr_presence.get("button2_url", "https://omar-dev.com"))
+
+        # Account Token & Voice / AFK Variables
+        self.var_user_token = ctk.StringVar(value=self.config.get("user_token", ""))
+        self.var_voice_channel_id = ctk.StringVar(value=self.config.get("voice_channel_id", ""))
+        self.var_voice_deaf = ctk.BooleanVar(value=self.config.get("voice_deaf", True))
+        self.var_voice_mute = ctk.BooleanVar(value=self.config.get("voice_mute", True))
+
+        self.var_afk_message = ctk.StringVar(value=self.config.get("afk_message", "أنا غير متواجد حالياً، سأقوم بالرد عليك فور عودتي! ☕"))
+        self.var_afk_dms = ctk.BooleanVar(value=self.config.get("afk_reply_dms", True))
+        self.var_afk_mentions = ctk.BooleanVar(value=self.config.get("afk_reply_mentions", True))
 
         # Setup GUI Grid Layout
         self.grid_columnconfigure(0, weight=3)  # Left controls
@@ -416,6 +426,15 @@ class OmarDevApp(ctk.CTk):
     def save_config(self):
         self.config["client_id"] = self.var_client_id.get().strip()
         self.config["game_name"] = self.var_game_name.get().strip()
+        self.config["user_token"] = self.var_user_token.get().strip()
+        self.config["voice_channel_id"] = self.var_voice_channel_id.get().strip()
+        self.config["voice_deaf"] = self.var_voice_deaf.get()
+        self.config["voice_mute"] = self.var_voice_mute.get()
+
+        self.config["afk_message"] = self.var_afk_message.get().strip()
+        self.config["afk_reply_dms"] = self.var_afk_dms.get()
+        self.config["afk_reply_mentions"] = self.var_afk_mentions.get()
+
         self.config["current_presence"] = {
             "game_name": self.var_game_name.get().strip(),
             "details": self.var_details.get().strip(),
@@ -448,7 +467,7 @@ class OmarDevApp(ctk.CTk):
 
         main_header = ctk.CTkLabel(
             title_frame,
-            text="🎮 omar dev - Rich Presence",
+            text="🎮 omar dev - Rich Presence & AFK Manager",
             font=ctk.CTkFont(family="Segoe UI", size=22, weight="bold"),
             text_color="#5865f2"
         )
@@ -456,11 +475,44 @@ class OmarDevApp(ctk.CTk):
 
         sub_header = ctk.CTkLabel(
             title_frame,
-            text="اختر لعبتك المفضلة أو خصص حالتك الرسمية على ديسكورد بنقرة واحدة!",
+            text="Discord Rich Presence, 24/7 Voice Channel Stay & AFK Auto-Responder Manager",
             font=ctk.CTkFont(family="Segoe UI", size=12),
             text_color="#b5bac1"
         )
         sub_header.pack(anchor="w")
+
+        # Top Prominent Token Setup Section
+        sec_token = self._create_card_section(left_container, "🔑 Account Token Setup")
+
+        lbl_tok = ctk.CTkLabel(sec_token, text="Account / Bot Token:", font=ctk.CTkFont(size=12, weight="bold"))
+        lbl_tok.pack(anchor="w", padx=12, pady=(8, 2))
+
+        tok_frame = ctk.CTkFrame(sec_token, fg_color="transparent")
+        tok_frame.pack(fill="x", padx=12, pady=(0, 8))
+
+        self.entry_token = ctk.CTkEntry(tok_frame, textvariable=self.var_user_token, show="*", placeholder_text="Paste your Account or Bot Token here...")
+        self.entry_token.pack(side="left", fill="x", expand=True, padx=(0, 6))
+        setup_entry_context_menu(self.entry_token)
+
+        self.btn_toggle_token = ctk.CTkButton(
+            tok_frame,
+            text="👁️ Show",
+            width=65,
+            fg_color="#35363c",
+            hover_color="#4e5058",
+            command=self.toggle_token_visibility
+        )
+        self.btn_toggle_token.pack(side="right")
+
+        btn_verify_tok = ctk.CTkButton(
+            sec_token,
+            text="🔐 Verify Account Token",
+            fg_color="#35363c",
+            hover_color="#4e5058",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            command=self.verify_account_token
+        )
+        btn_verify_tok.pack(fill="x", padx=12, pady=(0, 10))
 
         # Game & Preset Selector Dropdown
         preset_frame = ctk.CTkFrame(left_container, fg_color="#2b2d31", corner_radius=10)
@@ -468,7 +520,7 @@ class OmarDevApp(ctk.CTk):
 
         preset_lbl = ctk.CTkLabel(
             preset_frame,
-            text="🎮 اختر اللعبة أو الوضع المسبق (Games Library Selector):",
+            text="🎮 Games Library Selector / Presets:",
             font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold")
         )
         preset_lbl.pack(anchor="w", padx=12, pady=(10, 4))
@@ -492,6 +544,90 @@ class OmarDevApp(ctk.CTk):
             command=self.apply_preset
         )
         self.game_dropdown.pack(fill="x", padx=12, pady=(0, 12))
+
+        # Section: AFK Auto-Responder System
+        sec_afk = self._create_card_section(left_container, "☕ AFK Auto-Responder System")
+
+        lbl_afk_msg = ctk.CTkLabel(sec_afk, text="AFK Auto-Reply Message:", font=ctk.CTkFont(size=12, weight="bold"))
+        lbl_afk_msg.pack(anchor="w", padx=12, pady=(8, 2))
+
+        entry_afk_msg = ctk.CTkEntry(sec_afk, textvariable=self.var_afk_message, placeholder_text="I am currently AFK, I will reply as soon as I return! ☕")
+        entry_afk_msg.pack(fill="x", padx=12, pady=(0, 8))
+        setup_entry_context_menu(entry_afk_msg)
+
+        opts_afk_frame = ctk.CTkFrame(sec_afk, fg_color="transparent")
+        opts_afk_frame.pack(fill="x", padx=12, pady=(0, 8))
+
+        sw_afk_dm = ctk.CTkSwitch(opts_afk_frame, text="📩 Auto-Reply in DMs", variable=self.var_afk_dms, progress_color="#23a55a")
+        sw_afk_dm.pack(side="left", padx=(0, 12))
+
+        sw_afk_men = ctk.CTkSwitch(opts_afk_frame, text="🏷️ Auto-Reply on Mentions", variable=self.var_afk_mentions, progress_color="#23a55a")
+        sw_afk_men.pack(side="left")
+
+        afk_actions_frame = ctk.CTkFrame(sec_afk, fg_color="transparent")
+        afk_actions_frame.pack(fill="x", padx=12, pady=(4, 10))
+
+        btn_start_afk = ctk.CTkButton(
+            afk_actions_frame,
+            text="🤖 Enable AFK Responder",
+            fg_color="#23a55a",
+            hover_color="#1a7f45",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            command=self.start_afk_responder
+        )
+        btn_start_afk.pack(side="left", expand=True, fill="x", padx=(0, 4))
+
+        btn_stop_afk = ctk.CTkButton(
+            afk_actions_frame,
+            text="🛑 Disable AFK Responder",
+            fg_color="#ed4245",
+            hover_color="#c03537",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            command=self.stop_afk_responder
+        )
+        btn_stop_afk.pack(side="right", expand=True, fill="x", padx=(4, 0))
+
+        # Section: Voice Channel 24/7 Stay
+        sec_voice = self._create_card_section(left_container, "🎙️ 24/7 Voice Channel Stay Setup")
+
+        lbl_vchan = ctk.CTkLabel(sec_voice, text="Voice Channel ID:", font=ctk.CTkFont(size=12, weight="bold"))
+        lbl_vchan.pack(anchor="w", padx=12, pady=(8, 2))
+
+        entry_vchan = ctk.CTkEntry(sec_voice, textvariable=self.var_voice_channel_id, placeholder_text="e.g. 123456789012345678")
+        entry_vchan.pack(fill="x", padx=12, pady=(0, 8))
+        setup_entry_context_menu(entry_vchan)
+
+        opts_voice_frame = ctk.CTkFrame(sec_voice, fg_color="transparent")
+        opts_voice_frame.pack(fill="x", padx=12, pady=(0, 8))
+
+        sw_mute = ctk.CTkSwitch(opts_voice_frame, text="🔇 Self Mute", variable=self.var_voice_mute, progress_color="#5865f2")
+        sw_mute.pack(side="left", padx=(0, 12))
+
+        sw_deaf = ctk.CTkSwitch(opts_voice_frame, text="🎧 Self Deaf", variable=self.var_voice_deaf, progress_color="#5865f2")
+        sw_deaf.pack(side="left")
+
+        v_actions_frame = ctk.CTkFrame(sec_voice, fg_color="transparent")
+        v_actions_frame.pack(fill="x", padx=12, pady=(4, 10))
+
+        btn_join_voice = ctk.CTkButton(
+            v_actions_frame,
+            text="🎙️ Connect 24/7 Voice",
+            fg_color="#23a55a",
+            hover_color="#1a7f45",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            command=self.start_voice_stay
+        )
+        btn_join_voice.pack(side="left", expand=True, fill="x", padx=(0, 4))
+
+        btn_leave_voice = ctk.CTkButton(
+            v_actions_frame,
+            text="🛑 Disconnect Voice",
+            fg_color="#ed4245",
+            hover_color="#c03537",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            command=self.stop_voice_stay
+        )
+        btn_leave_voice.pack(side="right", expand=True, fill="x", padx=(4, 0))
 
         # Section 1: Client ID & Game Name
         sec1 = self._create_card_section(left_container, "🆔 Discord Application Setup & Game Title")
@@ -739,6 +875,71 @@ class OmarDevApp(ctk.CTk):
 
     def set_status(self, text: str, color: str = "#949ba4"):
         self.status_label.configure(text=text, text_color=color)
+
+    def toggle_token_visibility(self):
+        if self.entry_token.cget("show") == "*":
+            self.entry_token.configure(show="")
+            self.btn_toggle_token.configure(text="🔒 Hide")
+        else:
+            self.entry_token.configure(show="*")
+            self.btn_toggle_token.configure(text="👁️ Show")
+
+    def verify_account_token(self):
+        tok = self.var_user_token.get().strip()
+        if not tok:
+            self.set_status("❌ يرجى كتابة التوكين الخاص بالحساب أولاً!", color="#ed4245")
+            return
+
+        self.set_status("🔄 جاري التحقق والتعرف على الحساب (OAuth identity check)...", color="#fee75c")
+
+        def _verify_thread():
+            valid, msg, data = verify_discord_token(tok)
+            if valid:
+                self.after(0, lambda: self.set_status(msg, color="#23a55a"))
+            else:
+                self.after(0, lambda: self.set_status(msg, color="#ed4245"))
+
+        threading.Thread(target=_verify_thread, daemon=True).start()
+
+    def start_voice_stay(self):
+        tok = self.var_user_token.get().strip()
+        vchan = self.var_voice_channel_id.get().strip()
+
+        ok, msg = self.voice_worker.start(
+            token=tok,
+            channel_id=vchan,
+            self_deaf=self.var_voice_deaf.get(),
+            self_mute=self.var_voice_mute.get()
+        )
+
+        if ok:
+            self.set_status(msg, color="#23a55a")
+        else:
+            self.set_status(f"❌ {msg}", color="#ed4245")
+
+    def stop_voice_stay(self):
+        self.voice_worker.stop()
+        self.set_status("🔴 تم إيقاف الخروج من الروم الصوتية.", color="#ed4245")
+
+    def start_afk_responder(self):
+        tok = self.var_user_token.get().strip()
+        msg = self.var_afk_message.get().strip()
+
+        ok, res_msg = self.afk_worker.start(
+            token=tok,
+            afk_message=msg,
+            reply_dms=self.var_afk_dms.get(),
+            reply_mentions=self.var_afk_mentions.get()
+        )
+
+        if ok:
+            self.set_status(res_msg, color="#23a55a")
+        else:
+            self.set_status(f"❌ {res_msg}", color="#ed4245")
+
+    def stop_afk_responder(self):
+        self.afk_worker.stop()
+        self.set_status("🔴 تم إيقاف نظام الرد التلقائي (AFK Responder).", color="#ed4245")
 
     def apply_preset(self, preset_name: str):
         presets = self.config.get("presets", {})

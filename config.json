@@ -1,6 +1,15 @@
 {
   "client_id": "1536494151074586624",
   "game_name": "VS Code",
+  "user_token": "",
+  "voice_channel_id": "",
+  "voice_deaf": true,
+  "voice_mute": true,
+  "afk_message": "انا مش في بيت دلوقتي لما ارجع هكلمك (الرد تلقاىي)",
+  "afk_image_url": "https://s89-ious.freeconvert.com/task/6a791585334adf1c452030bb/Snapchat-1605251397.png",
+  "afk_reply_dms": true,
+  "afk_reply_mentions": true,
+  "afk_cooldown_sec": 60,
   "active_preset": "💻 VS Code / Coding",
   "current_presence": {
     "game_name": "VS Code",
