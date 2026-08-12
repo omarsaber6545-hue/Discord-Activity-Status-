@@ -9,8 +9,28 @@ from typing import Optional, Tuple, Dict, Any
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-# Device Platform Configurations with selectable status icons (Desktop 🖥️ / Mobile 📱)
+# Device Platform Configurations with exact VR & Console Gateway signatures
 PLATFORM_PRESETS = {
+    "vr_oculus": {
+        "title": "🥽 VR Headset Icon (Discord Oculus Signature)",
+        "os": "Android",
+        "browser": "Discord Oculus",
+        "device": "Oculus Quest",
+        "activity_name": "Virtual Reality VR 🥽",
+        "activity_details": "Exploring Virtual Reality 🥽",
+        "activity_state": "Oculus Quest 3 Active",
+        "platform_key": "vr"
+    },
+    "vr_discord_vr": {
+        "title": "🥽 VR Headset Icon (Discord VR Signature)",
+        "os": "Oculus",
+        "browser": "Discord VR",
+        "device": "Quest 3",
+        "activity_name": "Oculus Quest 3 VR 🥽",
+        "activity_details": "Exploring Virtual Reality 🥽",
+        "activity_state": "Meta Quest 3 Active",
+        "platform_key": "vr"
+    },
     "vr_desktop": {
         "title": "🥽 VR Headset (Desktop 🖥️ Icon)",
         "os": "Windows",
@@ -71,7 +91,7 @@ class DeviceSpooferWorker:
         self.is_running = False
         self.is_connected = False
         self.token = ""
-        self.platform_mode = "vr_desktop"
+        self.platform_mode = "vr_oculus"
         self.custom_details = ""
         self.status_type = "online"
         self.status_message = "🔴 Device Spoofer Stopped"
@@ -84,7 +104,7 @@ class DeviceSpooferWorker:
     def start(
         self,
         token: str,
-        platform_mode: str = "vr_desktop",
+        platform_mode: str = "vr_oculus",
         custom_details: str = "",
         status_type: str = "online"
     ) -> Tuple[bool, str]:
@@ -95,7 +115,7 @@ class DeviceSpooferWorker:
         self.token = token.strip()
         self.platform_mode = platform_mode.lower().strip()
         if self.platform_mode not in PLATFORM_PRESETS:
-            self.platform_mode = "vr_desktop"
+            self.platform_mode = "vr_oculus"
 
         self.custom_details = custom_details.strip()
         self.status_type = status_type.strip() if status_type.strip() in ("online", "idle", "dnd") else "online"
@@ -107,7 +127,7 @@ class DeviceSpooferWorker:
         self.is_running = True
         self.start_time = time.time()
         preset_info = PLATFORM_PRESETS[self.platform_mode]
-        self.status_message = f"🔄 Activating {preset_info['title']} Device Status Icon..."
+        self.status_message = f"🔄 Activating {preset_info['title']}..."
 
         self.worker_thread = threading.Thread(target=self._run_spoofer_loop, daemon=True)
         self.worker_thread.start()
@@ -133,7 +153,7 @@ class DeviceSpooferWorker:
 
         auth_header = self.token if not self.token.startswith("Bot ") else self.token
         gateway_url = "wss://gateway.discord.gg/?v=9&encoding=json"
-        preset = PLATFORM_PRESETS.get(self.platform_mode, PLATFORM_PRESETS["vr_desktop"])
+        preset = PLATFORM_PRESETS.get(self.platform_mode, PLATFORM_PRESETS["vr_oculus"])
 
         details_txt = self.custom_details if self.custom_details else preset["activity_details"]
         start_ms = int(self.start_time * 1000)
@@ -205,7 +225,7 @@ class DeviceSpooferWorker:
                             elif op == 1:
                                 await ws.send(json.dumps({"op": 1, "d": None}))
 
-                        except asyncioTimeoutError:
+                        except asyncio.TimeoutError:
                             pass
 
             except Exception as e:
