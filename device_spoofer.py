@@ -9,8 +9,19 @@ from typing import Optional, Tuple, Dict, Any
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-# Clean, Distinct Device Platform Configurations
+# Device Platform Configurations with exact VR, PS5, Mobile & Xbox Gateway signatures
 PLATFORM_PRESETS = {
+    "vr": {
+        "title": "🥽 VR Headset (Meta Quest 3)",
+        "os": "Android",
+        "browser": "Discord VR",
+        "device": "Quest 3",
+        "activity_name": "Virtual Reality VR",
+        "activity_details": "Playing in VR 🥽",
+        "activity_state": "Meta Quest 3 Active",
+        "platform_key": "vr",
+        "flags": 1
+    },
     "ps5": {
         "title": "🎮 PlayStation 5",
         "os": "PS5",
@@ -48,13 +59,13 @@ PLATFORM_PRESETS = {
 
 
 class DeviceSpooferWorker:
-    """Manages Gateway WebSocket session to spoof PlayStation / Mobile / Xbox device status."""
+    """Manages Gateway WebSocket session to spoof VR / PlayStation / Mobile device status."""
 
     def __init__(self):
         self.is_running = False
         self.is_connected = False
         self.token = ""
-        self.platform_mode = "ps5"
+        self.platform_mode = "vr"
         self.custom_details = ""
         self.status_type = "online"
         self.status_message = "🔴 Device Spoofer Stopped"
@@ -67,7 +78,7 @@ class DeviceSpooferWorker:
     def start(
         self,
         token: str,
-        platform_mode: str = "ps5",
+        platform_mode: str = "vr",
         custom_details: str = "",
         status_type: str = "online"
     ) -> Tuple[bool, str]:
@@ -78,7 +89,7 @@ class DeviceSpooferWorker:
         self.token = token.strip()
         self.platform_mode = platform_mode.lower().strip()
         if self.platform_mode not in PLATFORM_PRESETS:
-            self.platform_mode = "ps5"
+            self.platform_mode = "vr"
 
         self.custom_details = custom_details.strip()
         self.status_type = status_type.strip() if status_type.strip() in ("online", "idle", "dnd") else "online"
@@ -116,7 +127,7 @@ class DeviceSpooferWorker:
 
         auth_header = self.token if not self.token.startswith("Bot ") else self.token
         gateway_url = "wss://gateway.discord.gg/?v=9&encoding=json"
-        preset = PLATFORM_PRESETS.get(self.platform_mode, PLATFORM_PRESETS["ps5"])
+        preset = PLATFORM_PRESETS.get(self.platform_mode, PLATFORM_PRESETS["vr"])
 
         details_txt = self.custom_details if self.custom_details else preset["activity_details"]
         start_ms = int(self.start_time * 1000)

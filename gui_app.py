@@ -15,6 +15,7 @@ from rpc_manager import DiscordRPCManager
 from voice_manager import verify_discord_token, VoiceStayWorker
 from afk_manager import AFKResponderWorker
 from device_spoofer import DeviceSpooferWorker, PLATFORM_PRESETS
+from notification_manager import NotificationManager, NotificationItem
 
 # Appearance settings
 ctk.set_appearance_mode("Dark")
@@ -128,6 +129,189 @@ def setup_entry_context_menu(entry_widget):
             bind_target.bind("<Control-a>", _do_select_all)
             bind_target.bind("<Control-A>", _do_select_all)
             bind_target.bind("<Key>", _on_key_press)
+
+
+class NotificationCenterDialog(ctk.CTkToplevel):
+    """Sleek modal dialog showing real-time event logs, errors, and system notifications."""
+
+    def __init__(self, parent, notif_manager: NotificationManager):
+        super().__init__(parent)
+
+        self.notif_manager = notif_manager
+        self.current_filter = "all"
+
+        self.title("🔔 Notification Center — مركز الإشعارات")
+        self.geometry("580x640")
+        self.minsize(480, 420)
+        self.configure(fg_color="#18191c")
+
+        self.transient(parent)
+        self.after(100, self.lift)
+
+        self._build_ui()
+        self._refresh_list()
+
+    def _build_ui(self):
+        # Header Container
+        header_frame = ctk.CTkFrame(self, fg_color="#1e1f22", corner_radius=0, height=70)
+        header_frame.pack(fill="x")
+
+        title_lbl = ctk.CTkLabel(
+            header_frame,
+            text="🔔 Notification Center (مركز الإشعارات)",
+            font=ctk.CTkFont(family="Segoe UI", size=17, weight="bold"),
+            text_color="#ffffff"
+        )
+        title_lbl.pack(anchor="w", padx=18, pady=(12, 2))
+
+        sub_lbl = ctk.CTkLabel(
+            header_frame,
+            text="Real-time system events, status changes & error logs / سجل الأنشطة والأخطاء",
+            font=ctk.CTkFont(family="Segoe UI", size=11),
+            text_color="#949ba4"
+        )
+        sub_lbl.pack(anchor="w", padx=18, pady=(0, 10))
+
+        # Filter Category Bar
+        filter_bar = ctk.CTkFrame(self, fg_color="#111214", corner_radius=0)
+        filter_bar.pack(fill="x", padx=12, pady=(10, 6))
+
+        filters = [
+            ("All (الكل)", "all"),
+            ("❌ Errors", "error"),
+            ("🟢 Success", "success"),
+            ("⚠️ Warnings", "warning"),
+            ("ℹ️ Info", "info"),
+        ]
+
+        self.filter_buttons = {}
+        for label, key in filters:
+            btn = ctk.CTkButton(
+                filter_bar,
+                text=label,
+                command=lambda k=key: self._set_filter(k),
+                fg_color="#5865f2" if key == "all" else "#2b2d31",
+                hover_color="#4752c4",
+                font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
+                height=28,
+                corner_radius=6
+            )
+            btn.pack(side="left", padx=3, pady=6)
+            self.filter_buttons[key] = btn
+
+        # Scrollable Notifications Container
+        self.scroll_frame = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        self.scroll_frame.pack(fill="both", expand=True, padx=12, pady=6)
+
+        # Bottom Action Bar
+        bottom_bar = ctk.CTkFrame(self, fg_color="#1e1f22", corner_radius=0, height=45)
+        bottom_bar.pack(fill="x", side="bottom")
+
+        btn_clear = ctk.CTkButton(
+            bottom_bar,
+            text="🗑️ Clear History (مسح السجل)",
+            command=self._clear_all,
+            fg_color="#ed4245",
+            hover_color="#c03537",
+            font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
+            height=30,
+            corner_radius=6
+        )
+        btn_clear.pack(side="left", padx=14, pady=8)
+
+        btn_read = ctk.CTkButton(
+            bottom_bar,
+            text="✓ Mark Read (تحديد كمقروء)",
+            command=self._mark_all_read,
+            fg_color="#2b2d31",
+            hover_color="#3c3e44",
+            font=ctk.CTkFont(family="Segoe UI", size=11),
+            height=30,
+            corner_radius=6
+        )
+        btn_read.pack(side="left", padx=4, pady=8)
+
+        btn_close = ctk.CTkButton(
+            bottom_bar,
+            text="✕ Close",
+            command=self.destroy,
+            fg_color="#4e5058",
+            hover_color="#6d6f78",
+            font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
+            width=70,
+            height=30,
+            corner_radius=6
+        )
+        btn_close.pack(side="right", padx=14, pady=8)
+
+    def _set_filter(self, key: str):
+        self.current_filter = key
+        for k, btn in self.filter_buttons.items():
+            btn.configure(fg_color="#5865f2" if k == key else "#2b2d31")
+        self._refresh_list()
+
+    def _refresh_list(self):
+        for widget in self.scroll_frame.winfo_children():
+            widget.destroy()
+
+        items = self.notif_manager.get_filtered(self.current_filter)
+        if not items:
+            empty_lbl = ctk.CTkLabel(
+                self.scroll_frame,
+                text="✨ No notifications in this category!\nلا توجد إشعارات حالياً في هذا القسم",
+                font=ctk.CTkFont(family="Segoe UI", size=13),
+                text_color="#949ba4"
+            )
+            empty_lbl.pack(pady=60)
+            return
+
+        for item in items:
+            card = ctk.CTkFrame(
+                self.scroll_frame,
+                fg_color="#232428" if item.read else "#2b2d31",
+                corner_radius=8,
+                border_width=1,
+                border_color=item.color
+            )
+            card.pack(fill="x", pady=4, padx=2)
+
+            top_row = ctk.CTkFrame(card, fg_color="transparent")
+            top_row.pack(fill="x", padx=12, pady=(8, 2))
+
+            title_txt = f"{item.icon} {item.title}"
+            title_lbl = ctk.CTkLabel(
+                top_row,
+                text=title_txt,
+                font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
+                text_color=item.color
+            )
+            title_lbl.pack(side="left")
+
+            time_lbl = ctk.CTkLabel(
+                top_row,
+                text=f"⏱️ {item.timestamp}",
+                font=ctk.CTkFont(family="Segoe UI", size=10),
+                text_color="#949ba4"
+            )
+            time_lbl.pack(side="right")
+
+            msg_lbl = ctk.CTkLabel(
+                card,
+                text=item.message,
+                font=ctk.CTkFont(family="Segoe UI", size=11),
+                text_color="#dbdee1",
+                wraplength=480,
+                justify="left"
+            )
+            msg_lbl.pack(anchor="w", padx=12, pady=(0, 8))
+
+    def _mark_all_read(self):
+        self.notif_manager.mark_all_read()
+        self._refresh_list()
+
+    def _clear_all(self):
+        self.notif_manager.clear_all()
+        self._refresh_list()
 
 
 class DiscordPreviewCard(ctk.CTkFrame):
@@ -377,7 +561,14 @@ class OmarDevApp(ctk.CTk):
         self.voice_worker = VoiceStayWorker()
         self.afk_worker = AFKResponderWorker()
         self.spoofer_worker = DeviceSpooferWorker()
+        self.notif_manager = NotificationManager()
+        self.notif_dialog = None
+        self.toast_frame = None
+        self.toast_job = None
         self.start_timestamp = time.time()
+
+        self.notif_manager.on_notification_added = self._on_new_notification
+        self.notif_manager.on_state_changed = self._update_notification_badge
 
         # Load Configuration
         self.config = self.load_config()
@@ -401,7 +592,7 @@ class OmarDevApp(ctk.CTk):
 
         # Account Token & Device / Voice / AFK Variables
         self.var_user_token = ctk.StringVar(value=self.config.get("user_token", ""))
-        self.var_device_platform = ctk.StringVar(value=self.config.get("device_platform", "ps5"))
+        self.var_device_platform = ctk.StringVar(value=self.config.get("device_platform", "vr"))
         self.var_device_custom_text = ctk.StringVar(value=self.config.get("device_custom_text", ""))
 
         self.var_voice_channel_id = ctk.StringVar(value=self.config.get("voice_channel_id", ""))
@@ -487,12 +678,15 @@ class OmarDevApp(ctk.CTk):
         left_container = ctk.CTkScrollableFrame(self, fg_color="transparent")
         left_container.grid(row=0, column=0, sticky="nsew", padx=(16, 8), pady=16)
 
-        # Header Title
+        # Header Title with Notification Center Button
         title_frame = ctk.CTkFrame(left_container, fg_color="transparent")
         title_frame.pack(fill="x", pady=(0, 14))
 
+        title_left = ctk.CTkFrame(title_frame, fg_color="transparent")
+        title_left.pack(side="left", fill="x", expand=True)
+
         main_header = ctk.CTkLabel(
-            title_frame,
+            title_left,
             text="🎮 omar dev - Rich Presence, VR & PS5 Manager",
             font=ctk.CTkFont(family="Segoe UI", size=22, weight="bold"),
             text_color="#5865f2"
@@ -500,12 +694,27 @@ class OmarDevApp(ctk.CTk):
         main_header.pack(anchor="w")
 
         sub_header = ctk.CTkLabel(
-            title_frame,
+            title_left,
             text="Discord Rich Presence, VR Headset & PlayStation Badges, Voice 24/7 & AFK Manager",
             font=ctk.CTkFont(family="Segoe UI", size=12),
             text_color="#b5bac1"
         )
         sub_header.pack(anchor="w")
+
+        self.btn_notif_center = ctk.CTkButton(
+            title_frame,
+            text="🔔 Notifications (0)",
+            command=self.open_notification_center,
+            fg_color="#2b2d31",
+            hover_color="#35363c",
+            text_color="#dbdee1",
+            font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
+            height=34,
+            corner_radius=8,
+            border_width=1,
+            border_color="#3c3e44"
+        )
+        self.btn_notif_center.pack(side="right", padx=(8, 0), pady=4)
 
         # Top Prominent Token Setup Section
         sec_token = self._create_card_section(left_container, "🔑 Account Token Setup")
@@ -540,20 +749,21 @@ class OmarDevApp(ctk.CTk):
         )
         btn_verify_tok.pack(fill="x", padx=12, pady=(0, 10))
 
-        # Section: Device Platform Spoofer (PlayStation & Mobile Badges)
-        sec_spoofer = self._create_card_section(left_container, "🎮 PlayStation 5 & Console Device Badges")
+        # Section: Device Platform Spoofer (VR & PlayStation Badges)
+        sec_spoofer = self._create_card_section(left_container, "🥽 VR Headset & PlayStation Device Badges")
 
         lbl_plat = ctk.CTkLabel(sec_spoofer, text="Device Platform / نوع الجهاز المنصة:", font=ctk.CTkFont(size=12, weight="bold"))
         lbl_plat.pack(anchor="w", padx=12, pady=(8, 2))
 
         plat_map = {
+            "🥽 VR Headset (Meta Quest 3)": "vr",
             "🎮 PlayStation 5": "ps5",
             "📱 Mobile Phone (iPhone / Android)": "mobile",
             "🟩 Xbox Series X": "xbox"
         }
 
         current_key = self.var_device_platform.get()
-        default_val = "🎮 PlayStation 5"
+        default_val = "🥽 VR Headset (Meta Quest 3)"
         for k, v in plat_map.items():
             if v == current_key:
                 default_val = k
@@ -566,7 +776,7 @@ class OmarDevApp(ctk.CTk):
             button_color="#4752c4",
             button_hover_color="#3c45a5",
             font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"),
-            command=lambda selected: self.var_device_platform.set(plat_map.get(selected, "ps5"))
+            command=lambda selected: self.var_device_platform.set(plat_map.get(selected, "vr"))
         )
         self.spoofer_dropdown.set(default_val)
         self.spoofer_dropdown.pack(fill="x", padx=12, pady=(0, 8))
@@ -989,12 +1199,15 @@ class OmarDevApp(ctk.CTk):
         )
         user_tag.pack(anchor="w", pady=(0, 6))
 
-        # Badges Bar (Active Developer, PlayStation, Nitro)
+        # Badges Bar (Active Developer, VR Headset, PlayStation, Nitro)
         badges_frame = ctk.CTkFrame(info_frame, fg_color="transparent")
         badges_frame.pack(anchor="w", pady=(0, 10))
 
         b1 = ctk.CTkLabel(badges_frame, text="👨‍💻 Active Dev", fg_color="#2b2d31", text_color="#5865f2", corner_radius=6, font=ctk.CTkFont(size=10, weight="bold"))
         b1.pack(side="left", padx=(0, 4), ipadx=6, ipady=2)
+
+        b2 = ctk.CTkLabel(badges_frame, text="🥽 VR Quest", fg_color="#2b2d31", text_color="#fee75c", corner_radius=6, font=ctk.CTkFont(size=10, weight="bold"))
+        b2.pack(side="left", padx=(0, 4), ipadx=6, ipady=2)
 
         b3 = ctk.CTkLabel(badges_frame, text="🎮 PS5", fg_color="#2b2d31", text_color="#00439c", corner_radius=6, font=ctk.CTkFont(size=10, weight="bold"))
         b3.pack(side="left", padx=(0, 4), ipadx=6, ipady=2)
@@ -1020,6 +1233,122 @@ class OmarDevApp(ctk.CTk):
 
     def set_status(self, text: str, color: str = "#949ba4"):
         self.status_label.configure(text=text, text_color=color)
+
+        # Automatically broadcast to Notification Manager
+        if text and hasattr(self, "notif_manager") and self.notif_manager:
+            level = "info"
+            title = "Status Update"
+            if "❌" in text or "Error" in text or "error" in text or "failed" in text or color == "#ed4245":
+                level = "error"
+                title = "Error Alert ❌"
+            elif "🟢" in text or "active" in text.lower() or "connected" in text.lower() or "saved" in text.lower() or color == "#23a55a":
+                level = "success"
+                title = "Success 🟢"
+            elif "⚠️" in text or "warning" in text.lower() or color == "#fee75c":
+                level = "warning"
+                title = "Warning ⚠️"
+
+            clean_text = text.replace("❌", "").replace("🟢", "").replace("⚠️", "").replace("⚪", "").replace("🔄", "").replace("🌙", "").replace("🔴", "").strip()
+            if clean_text:
+                self.notif_manager.notify(title=title, message=clean_text, level=level)
+
+    def _on_new_notification(self, item: NotificationItem):
+        """Called when a new notification is added."""
+        self.show_toast(item)
+        self._update_notification_badge()
+        if self.notif_dialog and self.notif_dialog.winfo_exists():
+            self.notif_dialog._refresh_list()
+
+    def _update_notification_badge(self):
+        """Updates the notification center bell button count and color."""
+        if hasattr(self, "btn_notif_center") and self.btn_notif_center:
+            unread = self.notif_manager.get_unread_count()
+            total = len(self.notif_manager.notifications)
+            if unread > 0:
+                self.btn_notif_center.configure(
+                    text=f"🔔 Notifications ({unread})",
+                    fg_color="#ed4245",
+                    hover_color="#c03537",
+                    text_color="#ffffff"
+                )
+            else:
+                self.btn_notif_center.configure(
+                    text=f"🔔 Notifications ({total})",
+                    fg_color="#2b2d31",
+                    hover_color="#35363c",
+                    text_color="#dbdee1"
+                )
+
+    def open_notification_center(self):
+        """Opens the sleek Notification Center Dialog."""
+        if self.notif_dialog and self.notif_dialog.winfo_exists():
+            self.notif_dialog.lift()
+            self.notif_dialog.focus()
+            return
+
+        self.notif_dialog = NotificationCenterDialog(self, self.notif_manager)
+
+    def show_toast(self, item: NotificationItem):
+        """Displays a sleek floating toast notification in the bottom-right corner."""
+        try:
+            self._dismiss_toast()
+
+            self.toast_frame = ctk.CTkFrame(
+                self,
+                fg_color="#232428",
+                corner_radius=10,
+                border_width=1,
+                border_color=item.color
+            )
+            self.toast_frame.place(relx=0.98, rely=0.94, anchor="se")
+
+            top_row = ctk.CTkFrame(self.toast_frame, fg_color="transparent")
+            top_row.pack(fill="x", padx=12, pady=(8, 2))
+
+            icon_lbl = ctk.CTkLabel(
+                top_row,
+                text=f"{item.icon} {item.title}",
+                font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
+                text_color=item.color
+            )
+            icon_lbl.pack(side="left")
+
+            btn_close = ctk.CTkButton(
+                top_row,
+                text="✕",
+                width=20,
+                height=20,
+                fg_color="transparent",
+                hover_color="#35363c",
+                text_color="#949ba4",
+                font=ctk.CTkFont(size=10, weight="bold"),
+                command=self._dismiss_toast
+            )
+            btn_close.pack(side="right", padx=(8, 0))
+
+            msg_lbl = ctk.CTkLabel(
+                self.toast_frame,
+                text=item.message,
+                font=ctk.CTkFont(family="Segoe UI", size=11),
+                text_color="#dbdee1",
+                wraplength=300,
+                justify="left"
+            )
+            msg_lbl.pack(anchor="w", padx=12, pady=(0, 10))
+
+            if self.toast_job:
+                self.after_cancel(self.toast_job)
+            self.toast_job = self.after(4000, self._dismiss_toast)
+        except Exception:
+            pass
+
+    def _dismiss_toast(self):
+        try:
+            if hasattr(self, "toast_frame") and self.toast_frame and self.toast_frame.winfo_exists():
+                self.toast_frame.destroy()
+                self.toast_frame = None
+        except Exception:
+            pass
 
     def toggle_token_visibility(self):
         if self.entry_token.cget("show") == "*":
