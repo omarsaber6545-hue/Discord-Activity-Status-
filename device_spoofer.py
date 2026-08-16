@@ -59,14 +59,16 @@ PLATFORM_PRESETS = {
 
 
 class DeviceSpooferWorker:
-    """Manages Gateway WebSocket session to spoof VR / PlayStation / Mobile device status."""
+    """Manages Gateway WebSocket session to spoof VR / PlayStation / Mobile device status & custom games."""
 
     def __init__(self):
         self.is_running = False
         self.is_connected = False
         self.token = ""
         self.platform_mode = "vr"
+        self.custom_game_name = ""
         self.custom_details = ""
+        self.custom_state = ""
         self.status_type = "online"
         self.status_message = "🔴 Device Spoofer Stopped"
         self.user_tag = ""
@@ -80,18 +82,23 @@ class DeviceSpooferWorker:
         token: str,
         platform_mode: str = "vr",
         custom_details: str = "",
+        custom_game_name: str = "",
+        custom_state: str = "",
         status_type: str = "online"
     ) -> Tuple[bool, str]:
         """Starts Device Platform Spoofer in background thread."""
         if self.is_running:
-            return False, "Device spoofer is already running!"
+            self.stop()
+            time.sleep(0.3)
 
         self.token = token.strip()
         self.platform_mode = platform_mode.lower().strip()
         if self.platform_mode not in PLATFORM_PRESETS:
             self.platform_mode = "vr"
 
+        self.custom_game_name = custom_game_name.strip()
         self.custom_details = custom_details.strip()
+        self.custom_state = custom_state.strip()
         self.status_type = status_type.strip() if status_type.strip() in ("online", "idle", "dnd") else "online"
 
         if not self.token:
@@ -101,11 +108,12 @@ class DeviceSpooferWorker:
         self.is_running = True
         self.start_time = time.time()
         preset_info = PLATFORM_PRESETS[self.platform_mode]
-        self.status_message = f"🔄 Activating {preset_info['title']}..."
+        display_game = self.custom_game_name if self.custom_game_name else preset_info['title']
+        self.status_message = f"🔄 Activating {display_game}..."
 
         self.worker_thread = threading.Thread(target=self._run_spoofer_loop, daemon=True)
         self.worker_thread.start()
-        return True, f"🚀 Activated: {preset_info['title']}"
+        return True, f"🚀 Activated: {display_game}"
 
     def _run_spoofer_loop(self):
         """Asyncio loop running Gateway WebSocket session with spoofed device properties."""
@@ -129,7 +137,9 @@ class DeviceSpooferWorker:
         gateway_url = "wss://gateway.discord.gg/?v=9&encoding=json"
         preset = PLATFORM_PRESETS.get(self.platform_mode, PLATFORM_PRESETS["vr"])
 
+        game_name = self.custom_game_name if self.custom_game_name else preset["activity_name"]
         details_txt = self.custom_details if self.custom_details else preset["activity_details"]
+        state_txt = self.custom_state if self.custom_state else preset["activity_state"]
         start_ms = int(self.start_time * 1000)
 
         while self.is_running and not self.stop_event.is_set():
@@ -141,10 +151,10 @@ class DeviceSpooferWorker:
                     heartbeat_interval = hello["d"]["heartbeat_interval"] / 1000.0
 
                     activity_obj = {
-                        "name": preset["activity_name"],
+                        "name": game_name,
                         "type": 0,
                         "details": details_txt,
-                        "state": preset["activity_state"],
+                        "state": state_txt,
                         "platform": preset["platform_key"],
                         "timestamps": {
                             "start": start_ms
@@ -196,8 +206,8 @@ class DeviceSpooferWorker:
                                 username = user_obj.get("username", "Account")
                                 self.user_tag = username
                                 self.is_connected = True
-                                self.status_message = f"🟢 Device Platform Active: {preset['title']} ({self.user_tag})"
-                                logging.info(f"Device Spoofer READY: {preset['title']} for {self.user_tag}")
+                                self.status_message = f"🟢 Active: Playing {game_name} ({preset['title']})"
+                                logging.info(f"Device Spoofer READY: Playing {game_name} for {self.user_tag}")
 
                             elif op == 1:
                                 await ws.send(json.dumps({"op": 1, "d": None}))

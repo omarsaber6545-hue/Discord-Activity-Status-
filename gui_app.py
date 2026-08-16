@@ -16,6 +16,7 @@ from voice_manager import verify_discord_token, VoiceStayWorker
 from afk_manager import AFKResponderWorker
 from device_spoofer import DeviceSpooferWorker, PLATFORM_PRESETS
 from notification_manager import NotificationManager, NotificationItem
+from randomizer_engine import generate_random_presence
 
 # Appearance settings
 ctk.set_appearance_mode("Dark")
@@ -454,7 +455,7 @@ class DiscordPreviewCard(ctk.CTkFrame):
 
         self.btn1_preview = ctk.CTkButton(
             self.buttons_frame,
-            text="🔗 GitHub Profile",
+            text="🔗 GitHub: Omar-Dev",
             fg_color="#4e5058",
             hover_color="#5d6069",
             text_color="#ffffff",
@@ -463,7 +464,7 @@ class DiscordPreviewCard(ctk.CTkFrame):
             font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
             command=lambda: self._open_url(self.btn1_url)
         )
-        self.btn1_url = ""
+        self.btn1_url = "https://github.com/omarsaber6545-hue"
 
         self.btn2_preview = ctk.CTkButton(
             self.buttons_frame,
@@ -585,8 +586,8 @@ class OmarDevApp(ctk.CTk):
         self.var_small_txt = ctk.StringVar(value=curr_presence.get("small_text", "Coding is life"))
         self.var_show_timer = ctk.BooleanVar(value=curr_presence.get("show_timer", True))
 
-        self.var_btn1_lbl = ctk.StringVar(value=curr_presence.get("button1_label", "GitHub Profile"))
-        self.var_btn1_url = ctk.StringVar(value=curr_presence.get("button1_url", "https://github.com"))
+        self.var_btn1_lbl = ctk.StringVar(value=curr_presence.get("button1_label", "GitHub: Omar-Dev"))
+        self.var_btn1_url = ctk.StringVar(value=curr_presence.get("button1_url", "https://github.com/omarsaber6545-hue"))
         self.var_btn2_lbl = ctk.StringVar(value=curr_presence.get("button2_label", "Omar Dev Site"))
         self.var_btn2_url = ctk.StringVar(value=curr_presence.get("button2_url", "https://omar-dev.com"))
 
@@ -602,6 +603,7 @@ class OmarDevApp(ctk.CTk):
         self.var_afk_message = ctk.StringVar(value=self.config.get("afk_message", "أنا غير متواجد حالياً، سأقوم بالرد عليك فور عودتي! ☕"))
         self.var_afk_dms = ctk.BooleanVar(value=self.config.get("afk_reply_dms", True))
         self.var_afk_mentions = ctk.BooleanVar(value=self.config.get("afk_reply_mentions", True))
+        self.var_afk_cooldown = ctk.StringVar(value=str(self.config.get("afk_cooldown_sec", 15)))
 
         # Setup GUI Grid Layout
         self.grid_columnconfigure(0, weight=3)  # Left controls
@@ -651,6 +653,10 @@ class OmarDevApp(ctk.CTk):
         self.config["afk_message"] = self.var_afk_message.get().strip()
         self.config["afk_reply_dms"] = self.var_afk_dms.get()
         self.config["afk_reply_mentions"] = self.var_afk_mentions.get()
+        try:
+            self.config["afk_cooldown_sec"] = int(self.var_afk_cooldown.get().strip())
+        except Exception:
+            self.config["afk_cooldown_sec"] = 15
 
         self.config["current_presence"] = {
             "game_name": self.var_game_name.get().strip(),
@@ -700,6 +706,21 @@ class OmarDevApp(ctk.CTk):
             text_color="#b5bac1"
         )
         sub_header.pack(anchor="w")
+
+        self.btn_github = ctk.CTkButton(
+            title_frame,
+            text="🐙 GitHub (Omar-Dev)",
+            command=lambda: webbrowser.open("https://github.com/omarsaber6545-hue"),
+            fg_color="#24292e",
+            hover_color="#2f363d",
+            text_color="#ffffff",
+            font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
+            height=34,
+            corner_radius=8,
+            border_width=1,
+            border_color="#3c3e44"
+        )
+        self.btn_github.pack(side="right", padx=(8, 0), pady=4)
 
         self.btn_notif_center = ctk.CTkButton(
             title_frame,
@@ -840,7 +861,20 @@ class OmarDevApp(ctk.CTk):
             dropdown_font=ctk.CTkFont(family="Segoe UI", size=12),
             command=self.apply_preset
         )
-        self.game_dropdown.pack(fill="x", padx=12, pady=(0, 12))
+        self.game_dropdown.pack(fill="x", padx=12, pady=(0, 8))
+
+        btn_randomizer = ctk.CTkButton(
+            preset_frame,
+            text="🎲 Roll Random Game, Status & Theme (اختيار عشوائي)",
+            command=self.roll_randomizer,
+            fg_color="#8a2be2",
+            hover_color="#7b1fa2",
+            text_color="#ffffff",
+            font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
+            height=34,
+            corner_radius=8
+        )
+        btn_randomizer.pack(fill="x", padx=12, pady=(0, 12))
 
         # Section: AFK Auto-Responder System
         sec_afk = self._create_card_section(left_container, "☕ AFK Auto-Responder System")
@@ -860,6 +894,34 @@ class OmarDevApp(ctk.CTk):
 
         sw_afk_men = ctk.CTkSwitch(opts_afk_frame, text="🏷️ Auto-Reply on Mentions", variable=self.var_afk_mentions, progress_color="#23a55a")
         sw_afk_men.pack(side="left")
+
+        # Cooldown Anti-Ban Row
+        cooldown_frame = ctk.CTkFrame(sec_afk, fg_color="transparent")
+        cooldown_frame.pack(fill="x", padx=12, pady=(0, 8))
+
+        lbl_cooldown = ctk.CTkLabel(
+            cooldown_frame,
+            text="⏱️ Cooldown (حماية من البان):",
+            font=ctk.CTkFont(size=12, weight="bold")
+        )
+        lbl_cooldown.pack(side="left", padx=(0, 8))
+
+        entry_cooldown = ctk.CTkEntry(
+            cooldown_frame,
+            textvariable=self.var_afk_cooldown,
+            width=70,
+            placeholder_text="15"
+        )
+        entry_cooldown.pack(side="left")
+        setup_entry_context_menu(entry_cooldown)
+
+        lbl_cooldown_unit = ctk.CTkLabel(
+            cooldown_frame,
+            text="ثانية (15s لحماية حسابك من الإغلاق)",
+            font=ctk.CTkFont(size=11),
+            text_color="#949ba4"
+        )
+        lbl_cooldown_unit.pack(side="left", padx=(6, 0))
 
         afk_actions_frame = ctk.CTkFrame(sec_afk, fg_color="transparent")
         afk_actions_frame.pack(fill="x", padx=12, pady=(4, 10))
@@ -1378,12 +1440,16 @@ class OmarDevApp(ctk.CTk):
     def start_device_spoofer(self):
         tok = self.var_user_token.get().strip()
         plat = self.var_device_platform.get().strip()
-        cust = self.var_device_custom_text.get().strip()
+        cust_det = self.var_details.get().strip()
+        cust_game = self.var_game_name.get().strip()
+        cust_st = self.var_state.get().strip()
 
         ok, msg = self.spoofer_worker.start(
             token=tok,
             platform_mode=plat,
-            custom_details=cust
+            custom_details=cust_det,
+            custom_game_name=cust_game,
+            custom_state=cust_st
         )
 
         if ok:
@@ -1418,12 +1484,17 @@ class OmarDevApp(ctk.CTk):
     def start_afk_responder(self):
         tok = self.var_user_token.get().strip()
         msg = self.var_afk_message.get().strip()
+        try:
+            cooldown = int(self.var_afk_cooldown.get().strip())
+        except Exception:
+            cooldown = 15
 
         ok, res_msg = self.afk_worker.start(
             token=tok,
             afk_message=msg,
             reply_dms=self.var_afk_dms.get(),
-            reply_mentions=self.var_afk_mentions.get()
+            reply_mentions=self.var_afk_mentions.get(),
+            cooldown_sec=cooldown
         )
 
         if ok:
@@ -1455,6 +1526,40 @@ class OmarDevApp(ctk.CTk):
             self.var_btn2_lbl.set(data.get("button2_label", ""))
             self.var_btn2_url.set(data.get("button2_url", ""))
             self.set_status(f"⚡ Applied game preset: {preset_name}", color="#5865f2")
+
+    def roll_randomizer(self):
+        """Randomly generates game, rich status text, and visual theme."""
+        data = generate_random_presence()
+
+        self.var_game_name.set(data["game_name"])
+        self.var_details.set(data["details"])
+        self.var_state.set(data["state"])
+        self.var_large_img.set(data["large_image"])
+        self.var_large_txt.set(data["large_text"])
+        self.var_small_img.set(data["small_image"])
+        self.var_small_txt.set(data["small_text"])
+        self.var_device_custom_text.set(f"{data['game_name']} - {data['details']}")
+
+        # Update preview card visual theme & accent colors
+        if hasattr(self, "preview_card") and self.preview_card:
+            self.preview_card.large_img_label.configure(text=data["theme_icon"])
+            self.preview_card.large_img_frame.configure(fg_color=data["theme_accent"])
+            self.preview_card.header_label.configure(
+                text=f"⚡ THEME: {data['theme_name'].upper()}",
+                text_color=data["theme_accent"]
+            )
+            self.preview_card.card_bg.configure(border_color=data["theme_accent"])
+
+        # Immediately refresh live preview card
+        self.update_live_preview()
+
+        # Update live Discord Rich Presence
+        if self.rpc_manager.is_connected:
+            self.update_presence_now()
+        elif self.spoofer_worker.is_running:
+            self.start_device_spoofer()
+
+        self.set_status(f"🎲 Randomizer Applied: {data['game_name']} ({data['theme_name']})", color="#23a55a")
 
     def update_live_preview(self):
         elapsed_sec = int(time.time() - self.start_timestamp)

@@ -57,6 +57,9 @@ def send_discord_reply(token: str, channel_id: str, content: str, reply_to_msg_i
                     return resp.status in (200, 201)
             except Exception:
                 pass
+        if e.code == 429:
+            logging.warning(f"Rate limited by Discord (HTTP 429)! Backing off...")
+            return False
         logging.error(f"Error sending AFK reply (HTTP {e.code}): {e.reason}")
         return False
     except Exception as e:
@@ -73,7 +76,7 @@ class AFKResponderWorker:
         self.afk_message = "أنا غير متواجد حالياً، سأقوم بالرد عليك فور عودتي! ☕"
         self.reply_dms = True
         self.reply_mentions = True
-        self.cooldown_sec = 0  # 0s = Reply instantly to EVERY message
+        self.cooldown_sec = 15  # Default 15s cooldown to protect Discord account from bans/rate limits
         self.status_message = "🔴 AFK Auto-Responder Stopped"
         self.user_id = ""
         self.user_tag = ""
@@ -89,7 +92,7 @@ class AFKResponderWorker:
         afk_message: str,
         reply_dms: bool = True,
         reply_mentions: bool = True,
-        cooldown_sec: int = 0
+        cooldown_sec: int = 15
     ) -> Tuple[bool, str]:
         """Starts AFK Auto-Responder Gateway listener in background thread."""
         if self.is_running:
@@ -240,11 +243,11 @@ class AFKResponderWorker:
             reply_reason = "Server Mention"
 
         if should_reply:
-            target_key = f"{channel_id}_{author_id}"
+            target_key = f"{author_id}"
             now = time.time()
             last_time = self.last_replied.get(target_key, 0)
 
-            # If cooldown_sec == 0 or elapsed time >= cooldown_sec, reply instantly!
+            # Check if cooldown has elapsed (e.g. 15s)
             if self.cooldown_sec == 0 or (now - last_time >= self.cooldown_sec):
                 self.last_replied[target_key] = now
                 success = send_discord_reply(self.token, channel_id, self.afk_message, reply_to_msg_id=message_id)
@@ -252,6 +255,9 @@ class AFKResponderWorker:
                     self.replies_count += 1
                     self.status_message = f"🟢 Auto-replied to {reply_reason}! ({self.user_tag} - Total Replies: {self.replies_count})"
                     logging.info(f"AFK auto-replied to {author_id} in channel {channel_id} ({reply_reason})")
+            else:
+                remaining = int(self.cooldown_sec - (now - last_time))
+                logging.info(f"AFK cooldown active for user {author_id}: {remaining}s remaining before next reply (Anti-Ban protection).")
 
     def stop(self):
         """Stops AFK Auto-Responder."""
